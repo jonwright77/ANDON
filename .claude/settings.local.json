@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dotnet new sln *)",
+      "Read(//usr/local/share/dotnet/**)",
+      "Read(//opt/homebrew/opt/dotnet/bin/**)",
+      "Read(//usr/**)",
+      "Bash(export PATH=\"$PATH:/usr/local/share/dotnet:/opt/homebrew/bin\")",
+      "Bash(dotnet --version)",
+      "Bash(dotnet restore:*)",
+      "Bash(dotnet build:*)"
+    ]
+  }
+}

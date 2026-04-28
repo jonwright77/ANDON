@@ -1,0 +1,154 @@
+@page "/admin/andon-codes/{Id:int}/recipients"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
+@layout AndonApp.Components.Layout.AdminLayout
+@using AndonApp.Data
+@using AndonApp.Data.Models
+@inject AndonDbContext Db
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Recipients – ANDON Admin</PageTitle>
+
+<div class="admin-page">
+    <div class="page-header">
+        <div>
+            <a href="/admin/andon-codes" class="back-link">&larr; Back to ANDON Codes</a>
+            <h1>Recipients for <strong>@_code?.Code</strong> @_code?.Name</h1>
+        </div>
+        <button class="btn btn-primary" @onclick="ShowAdd">+ Add Email</button>
+    </div>
+
+    @if (_code == null)
+    {
+        <p>Loading...</p>
+    }
+    else if (!_recipients.Any())
+    {
+        <p class="empty-state">No recipients configured. Add email addresses to receive alerts for this code.</p>
+    }
+    else
+    {
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Email</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var r in _recipients)
+                {
+                    <tr>
+                        <td>@r.Email</td>
+                        <td>
+                            <button class="btn btn-sm btn-danger" @onclick="() => RemoveRecipient(r)">Remove</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@if (_showAdd)
+{
+    <div class="modal-backdrop" @onclick="CloseAdd">
+        <div class="modal modal-sm" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h2>Add Recipient</h2>
+                <button class="modal-close" @onclick="CloseAdd">&times;</button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(_addError))
+                {
+                    <div class="alert alert-error">@_addError</div>
+                }
+                <div class="form-group">
+                    <label>Email Address *</label>
+                    <input class="form-control" @bind="_newEmail" type="email" placeholder="name@example.com" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseAdd">Cancel</button>
+                <button class="btn btn-primary" @onclick="AddRecipient" disabled="@_saving">
+                    @(_saving ? "Adding..." : "Add")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private AndonCode? _code;
+    private List<AndonCodeRecipient> _recipients = new();
+    private bool _showAdd;
+    private string _newEmail = string.Empty;
+    private string? _addError;
+    private bool _saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _code = await Db.AndonCodes.FindAsync(Id);
+        if (_code == null) Nav.NavigateTo("/admin/andon-codes");
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _recipients = await Db.AndonCodeRecipients
+            .Where(r => r.AndonCodeId == Id)
+            .OrderBy(r => r.Email)
+            .ToListAsync();
+    }
+
+    private void ShowAdd()
+    {
+        _newEmail = string.Empty;
+        _addError = null;
+        _showAdd = true;
+    }
+
+    private void CloseAdd()
+    {
+        _showAdd = false;
+        _addError = null;
+    }
+
+    private async Task AddRecipient()
+    {
+        var email = _newEmail.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(email) || !email.Contains('@'))
+        {
+            _addError = "Please enter a valid email address.";
+            return;
+        }
+
+        if (await Db.AndonCodeRecipients.AnyAsync(r => r.AndonCodeId == Id && r.Email == email))
+        {
+            _addError = "This email is already a recipient.";
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            Db.AndonCodeRecipients.Add(new AndonCodeRecipient { AndonCodeId = Id, Email = email });
+            await Db.SaveChangesAsync();
+            CloseAdd();
+            await LoadAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task RemoveRecipient(AndonCodeRecipient r)
+    {
+        Db.AndonCodeRecipients.Remove(r);
+        await Db.SaveChangesAsync();
+        await LoadAsync();
+    }
+}

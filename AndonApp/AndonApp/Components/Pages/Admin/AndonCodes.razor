@@ -1,0 +1,243 @@
+@page "/admin/andon-codes"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
+@layout AndonApp.Components.Layout.AdminLayout
+@using AndonApp.Data
+@using AndonApp.Data.Models
+@inject AndonDbContext Db
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>ANDON Codes – Admin</PageTitle>
+
+<div class="admin-page">
+    <div class="page-header">
+        <h1>ANDON Codes</h1>
+        <button class="btn btn-primary" @onclick="() => OpenModal(null)">+ New Code</button>
+    </div>
+
+    @if (_codes == null)
+    {
+        <p>Loading...</p>
+    }
+    else if (!_codes.Any())
+    {
+        <p class="empty-state">No ANDON codes defined yet.</p>
+    }
+    else
+    {
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Code</th>
+                    <th>Name</th>
+                    <th>Description</th>
+                    <th>Active</th>
+                    <th>Recipients</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var code in _codes)
+                {
+                    <tr>
+                        <td><strong>@(code.Code)</strong></td>
+                        <td>@(code.Name)</td>
+                        <td>@(code.Description)</td>
+                        <td>
+                            <span class="badge @(code.IsActive ? "badge-green" : "badge-gray")">
+                                @(code.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </td>
+                        <td>@(code.Recipients.Count)</td>
+                        <td>
+                            <a href="/admin/andon-codes/@(code.Id)/recipients" class="btn btn-sm">Recipients</a>
+                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenModal(code)">Edit</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(code)">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@if (_showModal)
+{
+    <div class="modal-backdrop" @onclick="CloseModal">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h2>@(_editing == null ? "New ANDON Code" : "Edit ANDON Code")</h2>
+                <button class="modal-close" @onclick="CloseModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(_modalError))
+                {
+                    <div class="alert alert-error">@_modalError</div>
+                }
+                <div class="form-group">
+                    <label>Code *</label>
+                    <input class="form-control" @bind="_form.Code" placeholder="e.g. MACH" maxlength="50" />
+                </div>
+                <div class="form-group">
+                    <label>Name</label>
+                    <input class="form-control" @bind="_form.Name" placeholder="e.g. Machine Fault" maxlength="100" />
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea class="form-control" @bind="_form.Description" rows="3" maxlength="500"></textarea>
+                </div>
+                <div class="form-group form-check">
+                    <input type="checkbox" id="isActive" @bind="_form.IsActive" />
+                    <label for="isActive">Active</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveCode" disabled="@_saving">
+                    @(_saving ? "Saving..." : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteTarget != null)
+{
+    <div class="modal-backdrop">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h2>Delete ANDON Code</h2>
+            </div>
+            <div class="modal-body">
+                <p>Delete <strong>@_deleteTarget.Code</strong>? This cannot be undone.</p>
+                @if (!string.IsNullOrEmpty(_deleteError))
+                {
+                    <div class="alert alert-error">@_deleteError</div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="() => _deleteTarget = null">Cancel</button>
+                <button class="btn btn-danger" @onclick="DeleteCode">Delete</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<AndonCode>? _codes;
+    private bool _showModal;
+    private AndonCode? _editing;
+    private CodeForm _form = new();
+    private string? _modalError;
+    private bool _saving;
+    private AndonCode? _deleteTarget;
+    private string? _deleteError;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _codes = await Db.AndonCodes
+            .Include(c => c.Recipients)
+            .OrderBy(c => c.Code)
+            .ToListAsync();
+    }
+
+    private void OpenModal(AndonCode? code)
+    {
+        _editing = code;
+        _form = code == null
+            ? new CodeForm()
+            : new CodeForm { Code = code.Code, Name = code.Name ?? "", Description = code.Description ?? "", IsActive = code.IsActive };
+        _modalError = null;
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _editing = null;
+        _modalError = null;
+    }
+
+    private async Task SaveCode()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Code))
+        {
+            _modalError = "Code is required.";
+            return;
+        }
+
+        _saving = true;
+        _modalError = null;
+
+        try
+        {
+            var codeUpper = _form.Code.Trim().ToUpper();
+
+            if (_editing == null)
+            {
+                if (await Db.AndonCodes.AnyAsync(c => c.Code == codeUpper))
+                {
+                    _modalError = $"Code '{codeUpper}' already exists.";
+                    return;
+                }
+                Db.AndonCodes.Add(new AndonCode
+                {
+                    Code = codeUpper,
+                    Name = string.IsNullOrWhiteSpace(_form.Name) ? null : _form.Name.Trim(),
+                    Description = string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim(),
+                    IsActive = _form.IsActive
+                });
+            }
+            else
+            {
+                if (await Db.AndonCodes.AnyAsync(c => c.Code == codeUpper && c.Id != _editing.Id))
+                {
+                    _modalError = $"Code '{codeUpper}' already exists.";
+                    return;
+                }
+                _editing.Code = codeUpper;
+                _editing.Name = string.IsNullOrWhiteSpace(_form.Name) ? null : _form.Name.Trim();
+                _editing.Description = string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim();
+                _editing.IsActive = _form.IsActive;
+            }
+
+            await Db.SaveChangesAsync();
+            CloseModal();
+            await LoadAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void ConfirmDelete(AndonCode code)
+    {
+        _deleteTarget = code;
+        _deleteError = null;
+    }
+
+    private async Task DeleteCode()
+    {
+        if (_deleteTarget == null) return;
+        if (await Db.Incidents.AnyAsync(i => i.AndonCodeId == _deleteTarget.Id))
+        {
+            _deleteError = "Cannot delete: incidents exist for this code.";
+            return;
+        }
+        Db.AndonCodes.Remove(_deleteTarget);
+        await Db.SaveChangesAsync();
+        _deleteTarget = null;
+        await LoadAsync();
+    }
+
+    private class CodeForm
+    {
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public bool IsActive { get; set; } = true;
+    }
+}

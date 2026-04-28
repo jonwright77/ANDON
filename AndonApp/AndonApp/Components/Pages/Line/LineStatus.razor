@@ -1,0 +1,287 @@
+@page "/line/{Slug}"
+@using AndonApp.Data
+@using AndonApp.Data.Models
+@using AndonApp.Services
+@using Microsoft.AspNetCore.SignalR.Client
+@inject AndonDbContext Db
+@inject IIncidentService IncidentService
+@inject NavigationManager Nav
+@implements IAsyncDisposable
+@rendermode InteractiveServer
+
+<PageTitle>@(_line?.Name ?? "ANDON") – Status</PageTitle>
+
+@if (!_authorized)
+{
+    <div class="line-unauthorized">
+        <h1>Access Denied</h1>
+        <p>Invalid production line or access token.</p>
+    </div>
+}
+else
+{
+    <div class="status-board @GetBoardClass()" @onclick="HideModal">
+
+        @if (!_incidents.Any())
+        {
+            <div class="all-ok">
+                <div class="all-ok-text">ALL OK</div>
+                <div class="all-ok-line">@_line!.Name</div>
+            </div>
+        }
+        else
+        {
+            <div class="incident-board">
+                <div class="board-header">
+                    <div class="board-line-name">@_line!.Name</div>
+                    <div class="board-status-badge">@GetWorstSeverity() ALERT</div>
+                </div>
+                <div class="incident-list">
+                    @foreach (var incident in _incidents)
+                    {
+                        <div class="incident-card @GetIncidentClass(incident)" @onclick:stopPropagation>
+                            <div class="incident-severity">@incident.Severity</div>
+                            <div class="incident-code">
+                                <strong>@incident.AndonCode.Code</strong>
+                                @if (!string.IsNullOrEmpty(incident.AndonCode.Name))
+                                {
+                                    <span class="incident-code-name"> – @incident.AndonCode.Name</span>
+                                }
+                            </div>
+                            @if (!string.IsNullOrEmpty(incident.AdditionalInfo))
+                            {
+                                <div class="incident-info">@incident.AdditionalInfo</div>
+                            }
+                            <div class="incident-time">
+                                Opened: @incident.CreatedAt.ToLocalTime().ToString("HH:mm:ss dd-MMM-yyyy")
+                            </div>
+                            <button class="btn-close-incident"
+                                    @onclick="() => CloseIncident(incident.Id)"
+                                    @onclick:stopPropagation>
+                                &#x2713; Close Incident
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <button class="btn-new-incident" @onclick="ShowNewIncidentModal" @onclick:stopPropagation>
+            + New Incident
+        </button>
+    </div>
+}
+
+@if (_showModal)
+{
+    <div class="modal-backdrop" @onclick="HideModal">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h2>New Incident</h2>
+                <button class="modal-close" @onclick="HideModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(_modalError))
+                {
+                    <div class="alert alert-error">@_modalError</div>
+                }
+                <div class="form-group">
+                    <label>ANDON Code *</label>
+                    <select class="form-control" @bind="_form.AndonCodeId">
+                        <option value="0">-- Select ANDON Code --</option>
+                        @foreach (var code in _activeCodes)
+                        {
+                            <option value="@(code.Id)">
+                                @(code.Code) @(code.Name != null ? $"– {code.Name}" : "")
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Severity *</label>
+                    <div class="severity-select">
+                        <button type="button"
+                                class="severity-btn @(_form.Severity == Severity.AMBER ? "selected-amber" : "")"
+                                @onclick="() => _form.Severity = Severity.AMBER">
+                            AMBER
+                        </button>
+                        <button type="button"
+                                class="severity-btn @(_form.Severity == Severity.RED ? "selected-red" : "")"
+                                @onclick="() => _form.Severity = Severity.RED">
+                            RED
+                        </button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Additional Info</label>
+                    <textarea class="form-control"
+                              @bind="_form.AdditionalInfo"
+                              rows="4"
+                              placeholder="Describe the issue..."
+                              maxlength="1000"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="HideModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="SubmitIncident" disabled="@_submitting">
+                    @(_submitting ? "Raising..." : "Raise Incident")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = string.Empty;
+    [SupplyParameterFromQuery] public string? Token { get; set; }
+
+    private ProductionLine? _line;
+    private bool _authorized;
+    private List<Incident> _incidents = new();
+    private List<AndonCode> _activeCodes = new();
+
+    private bool _showModal;
+    private IncidentForm _form = new();
+    private string? _modalError;
+    private bool _submitting;
+
+    private HubConnection? _hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _line = await Db.ProductionLines
+            .FirstOrDefaultAsync(l => l.Slug == Slug && l.IsActive);
+
+        if (_line == null || string.IsNullOrEmpty(Token) || _line.AccessToken != Token)
+        {
+            _authorized = false;
+            return;
+        }
+
+        _authorized = true;
+        await LoadIncidentsAsync();
+        _activeCodes = await Db.AndonCodes
+            .Where(c => c.IsActive)
+            .OrderBy(c => c.Code)
+            .ToListAsync();
+
+        await ConnectSignalRAsync();
+    }
+
+    private async Task ConnectSignalRAsync()
+    {
+        var hubUrl = Nav.ToAbsoluteUri("/hubs/andon");
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(hubUrl)
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hubConnection.On<int>("IncidentCreated", async (_) =>
+        {
+            await LoadIncidentsAsync();
+            await InvokeAsync(StateHasChanged);
+        });
+
+        _hubConnection.On<int>("IncidentClosed", async (_) =>
+        {
+            await LoadIncidentsAsync();
+            await InvokeAsync(StateHasChanged);
+        });
+
+        await _hubConnection.StartAsync();
+        await _hubConnection.InvokeAsync("JoinLine", Slug);
+    }
+
+    private async Task LoadIncidentsAsync()
+    {
+        if (_line == null) return;
+        _incidents = await Db.Incidents
+            .Include(i => i.AndonCode)
+            .Where(i => i.ProductionLineId == _line.Id && i.Status == IncidentStatus.OPEN)
+            .OrderBy(i => i.CreatedAt)
+            .ToListAsync();
+    }
+
+    private string GetBoardClass() => _incidents.Any()
+        ? (_incidents.Any(i => i.Severity == Severity.RED) ? "status-red" : "status-amber")
+        : "status-green";
+
+    private string GetWorstSeverity() => _incidents.Any()
+        ? (_incidents.Any(i => i.Severity == Severity.RED) ? "RED" : "AMBER")
+        : "GREEN";
+
+    private string GetIncidentClass(Incident i) =>
+        i.Severity == Severity.RED ? "incident-red" : "incident-amber";
+
+    private void ShowNewIncidentModal()
+    {
+        _form = new IncidentForm();
+        _modalError = null;
+        _showModal = true;
+    }
+
+    private void HideModal()
+    {
+        _showModal = false;
+        _modalError = null;
+    }
+
+    private async Task SubmitIncident()
+    {
+        if (_form.AndonCodeId == 0)
+        {
+            _modalError = "Please select an ANDON code.";
+            return;
+        }
+
+        _submitting = true;
+        _modalError = null;
+
+        try
+        {
+            await IncidentService.CreateIncidentAsync(
+                _line!.Id,
+                _form.AndonCodeId,
+                _form.Severity,
+                string.IsNullOrWhiteSpace(_form.AdditionalInfo) ? null : _form.AdditionalInfo.Trim());
+
+            HideModal();
+            // Incidents will reload via SignalR callback
+        }
+        catch (Exception ex)
+        {
+            _modalError = $"Failed to raise incident: {ex.Message}";
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    private async Task CloseIncident(int incidentId)
+    {
+        try
+        {
+            await IncidentService.CloseIncidentAsync(incidentId, _line!.Id);
+            // Incidents will reload via SignalR callback
+        }
+        catch (Exception ex)
+        {
+            // Log silently; UI will self-correct on next SignalR tick
+            _ = ex;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection is not null)
+            await _hubConnection.DisposeAsync();
+    }
+
+    private class IncidentForm
+    {
+        public int AndonCodeId { get; set; }
+        public Severity Severity { get; set; } = Severity.AMBER;
+        public string? AdditionalInfo { get; set; }
+    }
+}

@@ -1,0 +1,253 @@
+@page "/admin/lines"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
+@layout AndonApp.Components.Layout.AdminLayout
+@using AndonApp.Data
+@using AndonApp.Data.Models
+@inject AndonDbContext Db
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Production Lines – Admin</PageTitle>
+
+<div class="admin-page">
+    <div class="page-header">
+        <h1>Production Lines</h1>
+        <button class="btn btn-primary" @onclick="() => OpenModal(null)">+ New Line</button>
+    </div>
+
+    @if (_lines == null)
+    {
+        <p>Loading...</p>
+    }
+    else if (!_lines.Any())
+    {
+        <p class="empty-state">No production lines configured.</p>
+    }
+    else
+    {
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Slug</th>
+                    <th>Active</th>
+                    <th>End-User URL</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var line in _lines)
+                {
+                    var lineUrl = $"{Nav.BaseUri}line/{line.Slug}?token={line.AccessToken}";
+                    <tr>
+                        <td><strong>@line.Name</strong></td>
+                        <td><code>@line.Slug</code></td>
+                        <td>
+                            <span class="badge @(line.IsActive ? "badge-green" : "badge-gray")">
+                                @(line.IsActive ? "Active" : "Inactive")
+                            </span>
+                        </td>
+                        <td>
+                            <div class="url-cell">
+                                <code class="url-text">@lineUrl</code>
+                                <a href="@lineUrl" target="_blank" class="btn btn-sm">Open</a>
+                            </div>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenModal(line)">Edit</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(line)">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@if (_showModal)
+{
+    <div class="modal-backdrop" @onclick="CloseModal">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h2>@(_editing == null ? "New Production Line" : "Edit Production Line")</h2>
+                <button class="modal-close" @onclick="CloseModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(_modalError))
+                {
+                    <div class="alert alert-error">@_modalError</div>
+                }
+                <div class="form-group">
+                    <label>Name *</label>
+                    <input class="form-control" @bind="_form.Name" placeholder="e.g. Line A" maxlength="100"
+                           @oninput="AutoSlug" />
+                </div>
+                <div class="form-group">
+                    <label>Slug * <small>(URL-safe, unique)</small></label>
+                    <input class="form-control" @bind="_form.Slug" placeholder="e.g. line-a" maxlength="100" />
+                    <small class="help-text">Used in the URL: /line/<em>@_form.Slug</em></small>
+                </div>
+                <div class="form-group form-check">
+                    <input type="checkbox" id="lineActive" @bind="_form.IsActive" />
+                    <label for="lineActive">Active</label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveLine" disabled="@_saving">
+                    @(_saving ? "Saving..." : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteTarget != null)
+{
+    <div class="modal-backdrop">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h2>Delete Production Line</h2>
+            </div>
+            <div class="modal-body">
+                <p>Delete <strong>@_deleteTarget.Name</strong>? This cannot be undone.</p>
+                @if (!string.IsNullOrEmpty(_deleteError))
+                {
+                    <div class="alert alert-error">@_deleteError</div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="() => _deleteTarget = null">Cancel</button>
+                <button class="btn btn-danger" @onclick="DeleteLine">Delete</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ProductionLine>? _lines;
+    private bool _showModal;
+    private ProductionLine? _editing;
+    private LineForm _form = new();
+    private string? _modalError;
+    private bool _saving;
+    private ProductionLine? _deleteTarget;
+    private string? _deleteError;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _lines = await Db.ProductionLines.OrderBy(l => l.Name).ToListAsync();
+    }
+
+    private void OpenModal(ProductionLine? line)
+    {
+        _editing = line;
+        _form = line == null
+            ? new LineForm()
+            : new LineForm { Name = line.Name, Slug = line.Slug, IsActive = line.IsActive };
+        _modalError = null;
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _editing = null;
+        _modalError = null;
+    }
+
+    private void AutoSlug(ChangeEventArgs e)
+    {
+        if (_editing != null) return; // Don't auto-slug on edit
+        var name = e.Value?.ToString() ?? "";
+        _form.Name = name;
+        _form.Slug = System.Text.RegularExpressions.Regex.Replace(
+            name.ToLowerInvariant().Trim(), @"[^a-z0-9]+", "-").Trim('-');
+    }
+
+    private async Task SaveLine()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Name) || string.IsNullOrWhiteSpace(_form.Slug))
+        {
+            _modalError = "Name and Slug are required.";
+            return;
+        }
+
+        var slug = _form.Slug.Trim().ToLower();
+        if (!System.Text.RegularExpressions.Regex.IsMatch(slug, @"^[a-z0-9\-]+$"))
+        {
+            _modalError = "Slug must contain only lowercase letters, numbers and hyphens.";
+            return;
+        }
+
+        _saving = true;
+        _modalError = null;
+
+        try
+        {
+            if (_editing == null)
+            {
+                if (await Db.ProductionLines.AnyAsync(l => l.Slug == slug))
+                {
+                    _modalError = $"Slug '{slug}' already exists.";
+                    return;
+                }
+                Db.ProductionLines.Add(new ProductionLine
+                {
+                    Name = _form.Name.Trim(),
+                    Slug = slug,
+                    AccessToken = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N"),
+                    IsActive = _form.IsActive
+                });
+            }
+            else
+            {
+                if (await Db.ProductionLines.AnyAsync(l => l.Slug == slug && l.Id != _editing.Id))
+                {
+                    _modalError = $"Slug '{slug}' already exists.";
+                    return;
+                }
+                _editing.Name = _form.Name.Trim();
+                _editing.Slug = slug;
+                _editing.IsActive = _form.IsActive;
+            }
+
+            await Db.SaveChangesAsync();
+            CloseModal();
+            await LoadAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void ConfirmDelete(ProductionLine line)
+    {
+        _deleteTarget = line;
+        _deleteError = null;
+    }
+
+    private async Task DeleteLine()
+    {
+        if (_deleteTarget == null) return;
+        if (await Db.Incidents.AnyAsync(i => i.ProductionLineId == _deleteTarget.Id))
+        {
+            _deleteError = "Cannot delete: incidents exist for this line.";
+            return;
+        }
+        Db.ProductionLines.Remove(_deleteTarget);
+        await Db.SaveChangesAsync();
+        _deleteTarget = null;
+        await LoadAsync();
+    }
+
+    private class LineForm
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Slug { get; set; } = string.Empty;
+        public bool IsActive { get; set; } = true;
+    }
+}

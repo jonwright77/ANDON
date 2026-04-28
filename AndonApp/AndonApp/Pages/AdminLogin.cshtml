@@ -1,0 +1,44 @@
+@page "/admin/login"
+@model AndonApp.Pages.AdminLoginModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin Login – ANDON</title>
+    <link rel="stylesheet" href="/css/app.css" />
+</head>
+<body>
+<div class="login-page">
+    <div class="login-card">
+        <h1>ANDON</h1>
+        <h2>Admin Sign In</h2>
+
+        @if (!string.IsNullOrEmpty(Model.Error))
+        {
+            <div class="alert alert-error">@Model.Error</div>
+        }
+
+        <form method="post">
+            @Html.AntiForgeryToken()
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input class="form-control" id="username" name="username"
+                       value="@Model.Username" placeholder="admin" autocomplete="username" />
+            </div>
+            <div class="form-group" style="margin-top:1rem">
+                <label for="password">Password</label>
+                <input class="form-control" type="password" id="password" name="password"
+                       autocomplete="current-password" />
+            </div>
+            <button type="submit" class="btn btn-primary" style="width:100%;margin-top:1.5rem">
+                Sign In
+            </button>
+        </form>
+    </div>
+</div>
+</body>
+</html>
