@@ -18,4 +18,5 @@ public class ProductionLine
     public bool IsActive { get; set; } = true;
 
     public ICollection<Incident> Incidents { get; set; } = new List<Incident>();
+    public ICollection<LineSchedule> Schedules { get; set; } = new List<LineSchedule>();
 }

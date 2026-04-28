@@ -20,6 +20,15 @@
 }
 else
 {
+    <div class="line-top-bar">
+        <span class="top-bar-line-name">@_line!.Name</span>
+        <span class="work-status-badge work-status-@GetWorkStatusClass()">@GetWorkStatus()</span>
+        <div class="top-bar-clock">
+            <div class="clock-time">@_now.ToString("HH:mm:ss")</div>
+            <div class="clock-date">@_now.ToString("dddd dd MMMM yyyy")</div>
+        </div>
+    </div>
+
     <div class="status-board @GetBoardClass()" @onclick="HideModal">
 
         @if (!_incidents.Any())
@@ -147,6 +156,12 @@ else
 
     private HubConnection? _hubConnection;
 
+    // Clock + schedule
+    private DateTime _now = DateTime.Now;
+    private DayOfWeek _loadedDay;
+    private LineSchedule? _todaySchedule;
+    private Timer? _clockTimer;
+
     protected override async Task OnInitializedAsync()
     {
         _line = await Db.ProductionLines
@@ -160,6 +175,8 @@ else
 
         _authorized = true;
         await LoadIncidentsAsync();
+        await LoadScheduleAsync();
+
         _activeCodes = await Db.AndonCodes
             .Where(c => c.IsActive)
             .OrderBy(c => c.Code)
@@ -167,6 +184,57 @@ else
 
         await ConnectSignalRAsync();
     }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _authorized)
+            _clockTimer = new Timer(OnClockTick, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+        return Task.CompletedTask;
+    }
+
+    private void OnClockTick(object? _)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            _now = DateTime.Now;
+            if (_now.DayOfWeek != _loadedDay)
+                await LoadScheduleAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadScheduleAsync()
+    {
+        if (_line == null) return;
+        _loadedDay = DateTime.Now.DayOfWeek;
+        _todaySchedule = await Db.LineSchedules
+            .Include(s => s.Breaks)
+            .FirstOrDefaultAsync(s => s.ProductionLineId == _line.Id && s.DayOfWeek == _loadedDay);
+    }
+
+    private string GetWorkStatus()
+    {
+        if (_todaySchedule == null || !_todaySchedule.IsWorkday)
+            return "Overtime";
+
+        var t = _now.TimeOfDay;
+
+        if (t < _todaySchedule.StartTime || t >= _todaySchedule.EndTime)
+            return "Overtime";
+
+        foreach (var brk in _todaySchedule.Breaks)
+            if (t >= brk.StartTime && t < brk.EndTime)
+                return brk.Name;
+
+        return "Working";
+    }
+
+    private string GetWorkStatusClass() => GetWorkStatus() switch
+    {
+        "Working" => "working",
+        "Overtime" => "overtime",
+        _ => "break"
+    };
 
     private async Task ConnectSignalRAsync()
     {
@@ -246,7 +314,6 @@ else
                 string.IsNullOrWhiteSpace(_form.AdditionalInfo) ? null : _form.AdditionalInfo.Trim());
 
             HideModal();
-            // Incidents will reload via SignalR callback
         }
         catch (Exception ex)
         {
@@ -263,17 +330,16 @@ else
         try
         {
             await IncidentService.CloseIncidentAsync(incidentId, _line!.Id);
-            // Incidents will reload via SignalR callback
         }
         catch (Exception ex)
         {
-            // Log silently; UI will self-correct on next SignalR tick
             _ = ex;
         }
     }
 
     public async ValueTask DisposeAsync()
     {
+        _clockTimer?.Dispose();
         if (_hubConnection is not null)
             await _hubConnection.DisposeAsync();
     }

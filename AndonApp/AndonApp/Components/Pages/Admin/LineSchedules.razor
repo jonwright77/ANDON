@@ -1,0 +1,299 @@
+@page "/admin/lines/{Id:int}/schedule"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
+@layout AndonApp.Components.Layout.AdminLayout
+@inject AndonDbContext Db
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Schedule – @(_line?.Name ?? "Line") – Admin</PageTitle>
+
+<div class="admin-page">
+    <div class="page-header">
+        <div>
+            <a href="/admin/lines" class="back-link">&larr; Back to Production Lines</a>
+            <h1>Work Schedule – @_line?.Name</h1>
+        </div>
+    </div>
+
+    @if (_days == null)
+    {
+        <p>Loading...</p>
+    }
+    else
+    {
+        <div class="schedule-grid">
+            @foreach (var day in _days)
+            {
+                <div class="schedule-card @(day.IsWorkday ? "" : "schedule-card-off")">
+                    <div class="schedule-card-header">
+                        <span class="schedule-day-name">@day.Day.ToString()</span>
+                        <label class="workday-toggle">
+                            <input type="checkbox" @bind="day.IsWorkday" />
+                            <span>Workday</span>
+                        </label>
+                    </div>
+
+                    @if (day.IsWorkday)
+                    {
+                        <div class="schedule-body">
+                            <div class="schedule-times">
+                                <div class="form-group">
+                                    <label>Start</label>
+                                    <input type="time" class="form-control"
+                                           value="@day.StartTime"
+                                           @onchange="e => day.StartTime = e.Value?.ToString() ?? day.StartTime" />
+                                </div>
+                                <span class="time-sep">to</span>
+                                <div class="form-group">
+                                    <label>End</label>
+                                    <input type="time" class="form-control"
+                                           value="@day.EndTime"
+                                           @onchange="e => day.EndTime = e.Value?.ToString() ?? day.EndTime" />
+                                </div>
+                            </div>
+
+                            @if (day.Breaks.Any())
+                            {
+                                <div class="break-list">
+                                    @foreach (var brk in day.Breaks)
+                                    {
+                                        <div class="break-item">
+                                            <span class="break-name">@brk.Name</span>
+                                            <span class="break-time">@Fmt(brk.StartTime)–@Fmt(brk.EndTime)</span>
+                                            <button class="btn-break-remove" title="Remove"
+                                                    @onclick="() => RemoveBreak(day, brk)">&#x2715;</button>
+                                        </div>
+                                    }
+                                </div>
+                            }
+
+                            @if (day.ShowAddBreak)
+                            {
+                                <div class="add-break-form">
+                                    <input class="form-control" placeholder="Name (e.g. Lunch)"
+                                           @bind="day.NewBreakName" maxlength="100" />
+                                    <div class="add-break-times">
+                                        <input type="time" class="form-control"
+                                               value="@day.NewBreakStart"
+                                               @onchange="e => day.NewBreakStart = e.Value?.ToString() ?? day.NewBreakStart" />
+                                        <span class="time-sep">to</span>
+                                        <input type="time" class="form-control"
+                                               value="@day.NewBreakEnd"
+                                               @onchange="e => day.NewBreakEnd = e.Value?.ToString() ?? day.NewBreakEnd" />
+                                    </div>
+                                    @if (!string.IsNullOrEmpty(day.BreakError))
+                                    {
+                                        <div class="alert alert-error">@day.BreakError</div>
+                                    }
+                                    <div class="add-break-actions">
+                                        <button class="btn btn-sm btn-secondary"
+                                                @onclick="() => { day.ShowAddBreak = false; day.BreakError = null; }">
+                                            Cancel
+                                        </button>
+                                        <button class="btn btn-sm btn-primary" @onclick="() => AddBreak(day)">
+                                            Add
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm add-break-btn"
+                                        @onclick="() => { day.ShowAddBreak = true; day.BreakError = null; }">
+                                    + Add Break
+                                </button>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="schedule-off-text">Rest day – no schedule</p>
+                    }
+
+                    <div class="schedule-card-footer">
+                        @if (!string.IsNullOrEmpty(day.SaveError))
+                        {
+                            <span class="schedule-save-error">@day.SaveError</span>
+                        }
+                        @if (day.Saved)
+                        {
+                            <span class="schedule-saved">&#x2713; Saved</span>
+                        }
+                        <button class="btn btn-primary btn-sm" @onclick="() => SaveDay(day)" disabled="@day.Saving">
+                            @(day.Saving ? "Saving..." : "Save")
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private ProductionLine? _line;
+    private List<DayModel>? _days;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _line = await Db.ProductionLines.FindAsync(Id);
+        if (_line == null) { Nav.NavigateTo("/admin/lines"); return; }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var schedules = await Db.LineSchedules
+            .Include(s => s.Breaks)
+            .Where(s => s.ProductionLineId == Id)
+            .ToListAsync();
+
+        _days = new[] {
+            DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday,
+            DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday
+        }
+        .Select(dow =>
+        {
+            var existing = schedules.FirstOrDefault(s => s.DayOfWeek == dow);
+            return new DayModel
+            {
+                ScheduleId = existing?.Id,
+                Day = dow,
+                IsWorkday = existing?.IsWorkday ?? (dow < DayOfWeek.Saturday),
+                StartTime = existing != null ? Fmt(existing.StartTime) : "08:00",
+                EndTime = existing != null ? Fmt(existing.EndTime) : "17:00",
+                Breaks = existing?.Breaks.OrderBy(b => b.StartTime).ToList() ?? new()
+            };
+        })
+        .ToList();
+    }
+
+    private async Task SaveDay(DayModel day)
+    {
+        day.SaveError = null;
+        day.Saved = false;
+        day.Saving = true;
+
+        try
+        {
+            TimeSpan.TryParse(day.StartTime, out var start);
+            TimeSpan.TryParse(day.EndTime, out var end);
+
+            if (day.IsWorkday && end <= start)
+            {
+                day.SaveError = "End time must be after start time.";
+                return;
+            }
+
+            if (day.ScheduleId == null)
+            {
+                var schedule = new AndonApp.Data.Models.LineSchedule
+                {
+                    ProductionLineId = Id,
+                    DayOfWeek = day.Day,
+                    StartTime = start,
+                    EndTime = end,
+                    IsWorkday = day.IsWorkday
+                };
+                Db.LineSchedules.Add(schedule);
+                await Db.SaveChangesAsync();
+                day.ScheduleId = schedule.Id;
+            }
+            else
+            {
+                var schedule = await Db.LineSchedules.FindAsync(day.ScheduleId);
+                if (schedule != null)
+                {
+                    schedule.StartTime = start;
+                    schedule.EndTime = end;
+                    schedule.IsWorkday = day.IsWorkday;
+                    await Db.SaveChangesAsync();
+                }
+            }
+
+            day.Saved = true;
+            StateHasChanged();
+            await Task.Delay(1800);
+            day.Saved = false;
+        }
+        finally
+        {
+            day.Saving = false;
+        }
+    }
+
+    private async Task AddBreak(DayModel day)
+    {
+        day.BreakError = null;
+
+        if (string.IsNullOrWhiteSpace(day.NewBreakName))
+        {
+            day.BreakError = "Break name is required.";
+            return;
+        }
+
+        if (!TimeSpan.TryParse(day.NewBreakStart, out var start) ||
+            !TimeSpan.TryParse(day.NewBreakEnd, out var end))
+        {
+            day.BreakError = "Invalid time.";
+            return;
+        }
+
+        if (end <= start)
+        {
+            day.BreakError = "Break end must be after break start.";
+            return;
+        }
+
+        if (day.ScheduleId == null)
+        {
+            await SaveDay(day);
+            if (day.ScheduleId == null) return;
+        }
+
+        var brk = new ScheduleBreak
+        {
+            LineScheduleId = day.ScheduleId.Value,
+            Name = day.NewBreakName.Trim(),
+            StartTime = start,
+            EndTime = end
+        };
+        Db.ScheduleBreaks.Add(brk);
+        await Db.SaveChangesAsync();
+
+        day.Breaks.Add(brk);
+        day.Breaks = day.Breaks.OrderBy(b => b.StartTime).ToList();
+        day.NewBreakName = "";
+        day.NewBreakStart = "12:00";
+        day.NewBreakEnd = "12:30";
+        day.ShowAddBreak = false;
+    }
+
+    private async Task RemoveBreak(DayModel day, ScheduleBreak brk)
+    {
+        Db.ScheduleBreaks.Remove(brk);
+        await Db.SaveChangesAsync();
+        day.Breaks.Remove(brk);
+    }
+
+    private static string Fmt(TimeSpan t) => t.ToString(@"hh\:mm");
+
+    private class DayModel
+    {
+        public int? ScheduleId { get; set; }
+        public DayOfWeek Day { get; set; }
+        public bool IsWorkday { get; set; }
+        public string StartTime { get; set; } = "08:00";
+        public string EndTime { get; set; } = "17:00";
+        public List<ScheduleBreak> Breaks { get; set; } = new();
+        public bool ShowAddBreak { get; set; }
+        public string NewBreakName { get; set; } = "";
+        public string NewBreakStart { get; set; } = "12:00";
+        public string NewBreakEnd { get; set; } = "12:30";
+        public string? SaveError { get; set; }
+        public string? BreakError { get; set; }
+        public bool Saving { get; set; }
+        public bool Saved { get; set; }
+    }
+}

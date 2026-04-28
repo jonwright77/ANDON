@@ -88,6 +88,33 @@ namespace AndonApp.Migrations
                 b.ToTable("ProductionLines");
             });
 
+            modelBuilder.Entity("AndonApp.Data.Models.LineSchedule", b =>
+            {
+                b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int");
+                SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                b.Property<int>("ProductionLineId").HasColumnType("int");
+                b.Property<int>("DayOfWeek").HasColumnType("int");
+                b.Property<TimeSpan>("StartTime").HasColumnType("time");
+                b.Property<TimeSpan>("EndTime").HasColumnType("time");
+                b.Property<bool>("IsWorkday").HasColumnType("bit");
+                b.HasKey("Id");
+                b.HasIndex("ProductionLineId", "DayOfWeek").IsUnique();
+                b.ToTable("LineSchedules");
+            });
+
+            modelBuilder.Entity("AndonApp.Data.Models.ScheduleBreak", b =>
+            {
+                b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int");
+                SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                b.Property<int>("LineScheduleId").HasColumnType("int");
+                b.Property<string>("Name").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
+                b.Property<TimeSpan>("StartTime").HasColumnType("time");
+                b.Property<TimeSpan>("EndTime").HasColumnType("time");
+                b.HasKey("Id");
+                b.HasIndex("LineScheduleId");
+                b.ToTable("ScheduleBreaks");
+            });
+
             modelBuilder.Entity("AndonApp.Data.Models.AndonCodeRecipient", b =>
             {
                 b.HasOne("AndonApp.Data.Models.AndonCode", "AndonCode")
@@ -123,6 +150,28 @@ namespace AndonApp.Migrations
             modelBuilder.Entity("AndonApp.Data.Models.ProductionLine", b =>
             {
                 b.Navigation("Incidents");
+                b.Navigation("Schedules");
+            });
+
+            modelBuilder.Entity("AndonApp.Data.Models.LineSchedule", b =>
+            {
+                b.HasOne("AndonApp.Data.Models.ProductionLine", "ProductionLine")
+                    .WithMany("Schedules")
+                    .HasForeignKey("ProductionLineId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+                b.Navigation("ProductionLine");
+                b.Navigation("Breaks");
+            });
+
+            modelBuilder.Entity("AndonApp.Data.Models.ScheduleBreak", b =>
+            {
+                b.HasOne("AndonApp.Data.Models.LineSchedule", "LineSchedule")
+                    .WithMany("Breaks")
+                    .HasForeignKey("LineScheduleId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+                b.Navigation("LineSchedule");
             });
 #pragma warning restore 612, 618
         }

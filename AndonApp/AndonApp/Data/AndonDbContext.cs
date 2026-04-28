@@ -12,6 +12,8 @@ public class AndonDbContext : DbContext
     public DbSet<ProductionLine> ProductionLines => Set<ProductionLine>();
     public DbSet<Incident> Incidents => Set<Incident>();
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
+    public DbSet<LineSchedule> LineSchedules => Set<LineSchedule>();
+    public DbSet<ScheduleBreak> ScheduleBreaks => Set<ScheduleBreak>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -62,6 +64,24 @@ public class AndonDbContext : DbContext
             .HasOne(r => r.AndonCode)
             .WithMany(c => c.Recipients)
             .HasForeignKey(r => r.AndonCodeId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // LineSchedules: one per line per day
+        modelBuilder.Entity<LineSchedule>()
+            .HasIndex(s => new { s.ProductionLineId, s.DayOfWeek })
+            .IsUnique();
+
+        modelBuilder.Entity<LineSchedule>()
+            .HasOne(s => s.ProductionLine)
+            .WithMany(l => l.Schedules)
+            .HasForeignKey(s => s.ProductionLineId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // ScheduleBreaks: cascade from schedule
+        modelBuilder.Entity<ScheduleBreak>()
+            .HasOne(b => b.LineSchedule)
+            .WithMany(s => s.Breaks)
+            .HasForeignKey(b => b.LineScheduleId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }
