@@ -139,3 +139,4 @@ C:\Users\jonny\OneDrive\Desktop\ANDON\AndonApp\AndonApp\obj\Debug\net8.0\refint\
 C:\Users\jonny\OneDrive\Desktop\ANDON\AndonApp\AndonApp\obj\Debug\net8.0\AndonApp.pdb
 C:\Users\jonny\OneDrive\Desktop\ANDON\AndonApp\AndonApp\obj\Debug\net8.0\AndonApp.genruntimeconfig.cache
 C:\Users\jonny\OneDrive\Desktop\ANDON\AndonApp\AndonApp\obj\Debug\net8.0\ref\AndonApp.dll
+C:\Users\jonny\OneDrive\Desktop\ANDON\AndonApp\AndonApp\obj\Debug\net8.0\AndonApp.sourcelink.json
