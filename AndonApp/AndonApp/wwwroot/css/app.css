@@ -43,11 +43,14 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
   align-items: center;
   justify-content: space-between;
   padding: 0.6rem 1.75rem;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(6px);
   color: var(--white);
   gap: 1rem;
+  transition: background-color 0.6s ease;
 }
+
+.top-bar-status-green { background: rgba(16, 160, 70, 0.85); }
+.top-bar-status-amber { background: rgba(204, 122, 0, 0.85); }
+.top-bar-status-red   { background: rgba(180, 20, 20, 0.85); }
 
 /* Left: line name */
 .top-bar-line-name {
@@ -63,6 +66,29 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
 .top-bar-clock {
   flex: 1;
   text-align: right;
+}
+
+
+.info-tile {
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  color: var(--white);
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.9rem;
+  line-height: 1.2;
+}
+
+.info-tile-label {
+  font-size: 0.62rem;
+  opacity: 0.65;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.info-tile-value {
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .clock-time {
@@ -104,15 +130,75 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
    ============================================================ */
 
 .status-board {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: background-color 0.6s ease;
+  cursor: default;
+  padding-top: 3.6rem; /* clears the fixed top bar */
+}
+
+/* Stat row — sits immediately below the top bar */
+.stat-row {
+  display: flex;
+  flex-shrink: 0;
+  gap: 1rem;
+  padding: 1.5rem 1.75rem 0.75rem;
+}
+
+.stat-card {
+  min-width: 180px;
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  border: 3px solid rgba(255,255,255,0.4);
+  color: var(--white);
+}
+
+.stat-card-green { background: rgba(10, 130, 45, 0.85); }
+.stat-card-amber { background: rgba(120, 60, 0, 0.8); }
+.stat-card-red   { background: rgba(180, 0, 30, 0.85); }
+
+.stat-card-empty {
+  background: rgba(0, 0, 0, 0.15);
+  border: 3px dashed rgba(255,255,255,0.25);
+  box-shadow: none;
+}
+
+.stat-card-label {
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.75);
+}
+
+.stat-card-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--white);
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-card-sub {
+  font-size: 0.8rem;
+  color: rgba(255,255,255,0.7);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Main content area — centres ALL OK or incident board */
+.board-content {
+  flex: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  position: relative;
-  transition: background-color 0.6s ease;
-  padding: 6rem 2rem 2rem;
-  cursor: default;
+  padding: 1rem 2rem 2rem;
 }
 
 .status-green { background: var(--bg-green); }
