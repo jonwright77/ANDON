@@ -3,7 +3,7 @@
 @layout AndonApp.Components.Layout.AdminLayout
 @using AndonApp.Data
 @using AndonApp.Data.Models
-@inject AndonDbContext Db
+@inject IDbContextFactory<AndonDbContext> DbFactory
 @inject NavigationManager Nav
 @rendermode InteractiveServer
 
@@ -139,7 +139,8 @@
 
     private async Task LoadAsync()
     {
-        _lines = await Db.ProductionLines.OrderBy(l => l.Name).ToListAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _lines = await db.ProductionLines.OrderBy(l => l.Name).ToListAsync();
     }
 
     private void OpenModal(ProductionLine? line)
@@ -188,14 +189,16 @@
 
         try
         {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
             if (_editing == null)
             {
-                if (await Db.ProductionLines.AnyAsync(l => l.Slug == slug))
+                if (await db.ProductionLines.AnyAsync(l => l.Slug == slug))
                 {
                     _modalError = $"Slug '{slug}' already exists.";
                     return;
                 }
-                Db.ProductionLines.Add(new ProductionLine
+                db.ProductionLines.Add(new ProductionLine
                 {
                     Name = _form.Name.Trim(),
                     Slug = slug,
@@ -205,17 +208,21 @@
             }
             else
             {
-                if (await Db.ProductionLines.AnyAsync(l => l.Slug == slug && l.Id != _editing.Id))
+                if (await db.ProductionLines.AnyAsync(l => l.Slug == slug && l.Id != _editing.Id))
                 {
                     _modalError = $"Slug '{slug}' already exists.";
                     return;
                 }
-                _editing.Name = _form.Name.Trim();
-                _editing.Slug = slug;
-                _editing.IsActive = _form.IsActive;
+                var entity = await db.ProductionLines.FindAsync(_editing.Id);
+                if (entity != null)
+                {
+                    entity.Name = _form.Name.Trim();
+                    entity.Slug = slug;
+                    entity.IsActive = _form.IsActive;
+                }
             }
 
-            await Db.SaveChangesAsync();
+            await db.SaveChangesAsync();
             CloseModal();
             await LoadAsync();
         }
@@ -234,13 +241,15 @@
     private async Task DeleteLine()
     {
         if (_deleteTarget == null) return;
-        if (await Db.Incidents.AnyAsync(i => i.ProductionLineId == _deleteTarget.Id))
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (await db.Incidents.AnyAsync(i => i.ProductionLineId == _deleteTarget.Id))
         {
             _deleteError = "Cannot delete: incidents exist for this line.";
             return;
         }
-        Db.ProductionLines.Remove(_deleteTarget);
-        await Db.SaveChangesAsync();
+        var entity = await db.ProductionLines.FindAsync(_deleteTarget.Id);
+        if (entity != null) db.ProductionLines.Remove(entity);
+        await db.SaveChangesAsync();
         _deleteTarget = null;
         await LoadAsync();
     }

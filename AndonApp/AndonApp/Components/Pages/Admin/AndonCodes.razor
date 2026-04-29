@@ -3,7 +3,7 @@
 @layout AndonApp.Components.Layout.AdminLayout
 @using AndonApp.Data
 @using AndonApp.Data.Models
-@inject AndonDbContext Db
+@inject IDbContextFactory<AndonDbContext> DbFactory
 @inject NavigationManager Nav
 @rendermode InteractiveServer
 
@@ -137,7 +137,8 @@
 
     private async Task LoadAsync()
     {
-        _codes = await Db.AndonCodes
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _codes = await db.AndonCodes
             .Include(c => c.Recipients)
             .OrderBy(c => c.Code)
             .ToListAsync();
@@ -174,15 +175,16 @@
         try
         {
             var codeUpper = _form.Code.Trim().ToUpper();
+            await using var db = await DbFactory.CreateDbContextAsync();
 
             if (_editing == null)
             {
-                if (await Db.AndonCodes.AnyAsync(c => c.Code == codeUpper))
+                if (await db.AndonCodes.AnyAsync(c => c.Code == codeUpper))
                 {
                     _modalError = $"Code '{codeUpper}' already exists.";
                     return;
                 }
-                Db.AndonCodes.Add(new AndonCode
+                db.AndonCodes.Add(new AndonCode
                 {
                     Code = codeUpper,
                     Name = string.IsNullOrWhiteSpace(_form.Name) ? null : _form.Name.Trim(),
@@ -192,18 +194,22 @@
             }
             else
             {
-                if (await Db.AndonCodes.AnyAsync(c => c.Code == codeUpper && c.Id != _editing.Id))
+                if (await db.AndonCodes.AnyAsync(c => c.Code == codeUpper && c.Id != _editing.Id))
                 {
                     _modalError = $"Code '{codeUpper}' already exists.";
                     return;
                 }
-                _editing.Code = codeUpper;
-                _editing.Name = string.IsNullOrWhiteSpace(_form.Name) ? null : _form.Name.Trim();
-                _editing.Description = string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim();
-                _editing.IsActive = _form.IsActive;
+                var entity = await db.AndonCodes.FindAsync(_editing.Id);
+                if (entity != null)
+                {
+                    entity.Code = codeUpper;
+                    entity.Name = string.IsNullOrWhiteSpace(_form.Name) ? null : _form.Name.Trim();
+                    entity.Description = string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim();
+                    entity.IsActive = _form.IsActive;
+                }
             }
 
-            await Db.SaveChangesAsync();
+            await db.SaveChangesAsync();
             CloseModal();
             await LoadAsync();
         }
@@ -222,13 +228,15 @@
     private async Task DeleteCode()
     {
         if (_deleteTarget == null) return;
-        if (await Db.Incidents.AnyAsync(i => i.AndonCodeId == _deleteTarget.Id))
+        await using var db = await DbFactory.CreateDbContextAsync();
+        if (await db.Incidents.AnyAsync(i => i.AndonCodeId == _deleteTarget.Id))
         {
             _deleteError = "Cannot delete: incidents exist for this code.";
             return;
         }
-        Db.AndonCodes.Remove(_deleteTarget);
-        await Db.SaveChangesAsync();
+        var entity = await db.AndonCodes.FindAsync(_deleteTarget.Id);
+        if (entity != null) db.AndonCodes.Remove(entity);
+        await db.SaveChangesAsync();
         _deleteTarget = null;
         await LoadAsync();
     }

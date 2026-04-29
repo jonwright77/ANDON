@@ -7,7 +7,9 @@ using Microsoft.EntityFrameworkCore;
 var builder = WebApplication.CreateBuilder(args);
 
 // ---- Database ----
-builder.Services.AddDbContext<AndonDbContext>(options =>
+// Factory registered as singleton so Blazor Server circuits can create short-lived contexts per operation.
+// Also registers AndonDbContext as scoped for controllers and services.
+builder.Services.AddDbContextFactory<AndonDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // ---- Authentication ----

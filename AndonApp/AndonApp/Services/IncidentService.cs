@@ -50,7 +50,14 @@ public class IncidentService : IIncidentService
 
         // Broadcast via SignalR
         var slug = incident.ProductionLine.Slug;
-        await _hub.Clients.Group($"line:{slug}").SendAsync("IncidentCreated", incident.Id);
+        await _hub.Clients.Group($"line:{slug}").SendAsync("IncidentCreated", new IncidentSummaryDto(
+            incident.Id,
+            incident.Severity,
+            incident.AndonCode.Code,
+            incident.AndonCode.Name,
+            incident.AdditionalInfo,
+            incident.CreatedAt
+        ));
 
         // Send email (non-blocking failure)
         try { await _email.SendIncidentOpenedAsync(incident); }

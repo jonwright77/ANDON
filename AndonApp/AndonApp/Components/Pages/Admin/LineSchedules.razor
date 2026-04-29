@@ -1,7 +1,7 @@
 @page "/admin/lines/{Id:int}/schedule"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
 @layout AndonApp.Components.Layout.AdminLayout
-@inject AndonDbContext Db
+@inject IDbContextFactory<AndonDbContext> DbFactory
 @inject NavigationManager Nav
 @rendermode InteractiveServer
 
@@ -137,14 +137,16 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _line = await Db.ProductionLines.FindAsync(Id);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _line = await db.ProductionLines.FindAsync(Id);
         if (_line == null) { Nav.NavigateTo("/admin/lines"); return; }
         await LoadAsync();
     }
 
     private async Task LoadAsync()
     {
-        var schedules = await Db.LineSchedules
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var schedules = await db.LineSchedules
             .Include(s => s.Breaks)
             .Where(s => s.ProductionLineId == Id)
             .ToListAsync();
@@ -186,6 +188,8 @@
                 return;
             }
 
+            await using var db = await DbFactory.CreateDbContextAsync();
+
             if (day.ScheduleId == null)
             {
                 var schedule = new AndonApp.Data.Models.LineSchedule
@@ -196,19 +200,19 @@
                     EndTime = end,
                     IsWorkday = day.IsWorkday
                 };
-                Db.LineSchedules.Add(schedule);
-                await Db.SaveChangesAsync();
+                db.LineSchedules.Add(schedule);
+                await db.SaveChangesAsync();
                 day.ScheduleId = schedule.Id;
             }
             else
             {
-                var schedule = await Db.LineSchedules.FindAsync(day.ScheduleId);
+                var schedule = await db.LineSchedules.FindAsync(day.ScheduleId);
                 if (schedule != null)
                 {
                     schedule.StartTime = start;
                     schedule.EndTime = end;
                     schedule.IsWorkday = day.IsWorkday;
-                    await Db.SaveChangesAsync();
+                    await db.SaveChangesAsync();
                 }
             }
 
@@ -259,8 +263,9 @@
             StartTime = start,
             EndTime = end
         };
-        Db.ScheduleBreaks.Add(brk);
-        await Db.SaveChangesAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        db.ScheduleBreaks.Add(brk);
+        await db.SaveChangesAsync();
 
         day.Breaks.Add(brk);
         day.Breaks = day.Breaks.OrderBy(b => b.StartTime).ToList();
@@ -272,8 +277,10 @@
 
     private async Task RemoveBreak(DayModel day, ScheduleBreak brk)
     {
-        Db.ScheduleBreaks.Remove(brk);
-        await Db.SaveChangesAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var entity = await db.ScheduleBreaks.FindAsync(brk.Id);
+        if (entity != null) db.ScheduleBreaks.Remove(entity);
+        await db.SaveChangesAsync();
         day.Breaks.Remove(brk);
     }
 

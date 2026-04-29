@@ -3,7 +3,7 @@
 @using AndonApp.Data.Models
 @using AndonApp.Services
 @using Microsoft.AspNetCore.SignalR.Client
-@inject AndonDbContext Db
+@inject IDbContextFactory<AndonDbContext> DbFactory
 @inject IIncidentService IncidentService
 @inject NavigationManager Nav
 @implements IAsyncDisposable
@@ -51,10 +51,10 @@ else
                         <div class="incident-card @GetIncidentClass(incident)" @onclick:stopPropagation>
                             <div class="incident-severity">@incident.Severity</div>
                             <div class="incident-code">
-                                <strong>@incident.AndonCode.Code</strong>
-                                @if (!string.IsNullOrEmpty(incident.AndonCode.Name))
+                                <strong>@incident.AndonCode</strong>
+                                @if (!string.IsNullOrEmpty(incident.AndonCodeName))
                                 {
-                                    <span class="incident-code-name"> – @incident.AndonCode.Name</span>
+                                    <span class="incident-code-name"> – @incident.AndonCodeName</span>
                                 }
                             </div>
                             @if (!string.IsNullOrEmpty(incident.AdditionalInfo))
@@ -64,10 +64,15 @@ else
                             <div class="incident-time">
                                 Opened: @incident.CreatedAt.ToLocalTime().ToString("HH:mm:ss dd-MMM-yyyy")
                             </div>
+                            @if (_closeError != null && _closeErrorId == incident.Id)
+                            {
+                                <div class="alert alert-error">@_closeError</div>
+                            }
                             <button class="btn-close-incident"
                                     @onclick="() => CloseIncident(incident.Id)"
-                                    @onclick:stopPropagation>
-                                &#x2713; Close Incident
+                                    @onclick:stopPropagation
+                                    disabled="@(_closingId == incident.Id)">
+                                @(_closingId == incident.Id ? "Closing..." : "✓ Close Incident")
                             </button>
                         </div>
                     }
@@ -146,13 +151,17 @@ else
 
     private ProductionLine? _line;
     private bool _authorized;
-    private List<Incident> _incidents = new();
+    private List<IncidentSummaryDto> _incidents = new();
     private List<AndonCode> _activeCodes = new();
 
     private bool _showModal;
     private IncidentForm _form = new();
     private string? _modalError;
     private bool _submitting;
+
+    private int? _closingId;
+    private string? _closeError;
+    private int? _closeErrorId;
 
     private HubConnection? _hubConnection;
 
@@ -164,7 +173,8 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        _line = await Db.ProductionLines
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _line = await db.ProductionLines
             .FirstOrDefaultAsync(l => l.Slug == Slug && l.IsActive);
 
         if (_line == null || string.IsNullOrEmpty(Token) || _line.AccessToken != Token)
@@ -177,7 +187,8 @@ else
         await LoadIncidentsAsync();
         await LoadScheduleAsync();
 
-        _activeCodes = await Db.AndonCodes
+        await using var db2 = await DbFactory.CreateDbContextAsync();
+        _activeCodes = await db2.AndonCodes
             .Where(c => c.IsActive)
             .OrderBy(c => c.Code)
             .ToListAsync();
@@ -207,7 +218,8 @@ else
     {
         if (_line == null) return;
         _loadedDay = DateTime.Now.DayOfWeek;
-        _todaySchedule = await Db.LineSchedules
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _todaySchedule = await db.LineSchedules
             .Include(s => s.Breaks)
             .FirstOrDefaultAsync(s => s.ProductionLineId == _line.Id && s.DayOfWeek == _loadedDay);
     }
@@ -244,29 +256,43 @@ else
             .WithAutomaticReconnect()
             .Build();
 
-        _hubConnection.On<int>("IncidentCreated", async (_) =>
+        _hubConnection.On<IncidentSummaryDto>("IncidentCreated", async (dto) =>
         {
-            await LoadIncidentsAsync();
-            await InvokeAsync(StateHasChanged);
+            await InvokeAsync(() =>
+            {
+                _incidents.Add(dto);
+                _incidents = _incidents.OrderBy(i => i.CreatedAt).ToList();
+                StateHasChanged();
+            });
         });
 
-        _hubConnection.On<int>("IncidentClosed", async (_) =>
+        _hubConnection.On<int>("IncidentClosed", async (id) =>
         {
-            await LoadIncidentsAsync();
-            await InvokeAsync(StateHasChanged);
+            await InvokeAsync(() =>
+            {
+                _incidents.RemoveAll(i => i.Id == id);
+                StateHasChanged();
+            });
         });
 
         await _hubConnection.StartAsync();
-        await _hubConnection.InvokeAsync("JoinLine", Slug);
+        await _hubConnection.InvokeAsync("JoinLine", Slug, Token);
     }
 
     private async Task LoadIncidentsAsync()
     {
         if (_line == null) return;
-        _incidents = await Db.Incidents
-            .Include(i => i.AndonCode)
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _incidents = await db.Incidents
             .Where(i => i.ProductionLineId == _line.Id && i.Status == IncidentStatus.OPEN)
             .OrderBy(i => i.CreatedAt)
+            .Select(i => new IncidentSummaryDto(
+                i.Id,
+                i.Severity,
+                i.AndonCode.Code,
+                i.AndonCode.Name,
+                i.AdditionalInfo,
+                i.CreatedAt))
             .ToListAsync();
     }
 
@@ -278,7 +304,7 @@ else
         ? (_incidents.Any(i => i.Severity == Severity.RED) ? "RED" : "AMBER")
         : "GREEN";
 
-    private string GetIncidentClass(Incident i) =>
+    private string GetIncidentClass(IncidentSummaryDto i) =>
         i.Severity == Severity.RED ? "incident-red" : "incident-amber";
 
     private void ShowNewIncidentModal()
@@ -327,13 +353,22 @@ else
 
     private async Task CloseIncident(int incidentId)
     {
+        _closingId = incidentId;
+        _closeError = null;
+        _closeErrorId = null;
+
         try
         {
             await IncidentService.CloseIncidentAsync(incidentId, _line!.Id);
         }
         catch (Exception ex)
         {
-            _ = ex;
+            _closeError = $"Failed to close incident: {ex.Message}";
+            _closeErrorId = incidentId;
+        }
+        finally
+        {
+            _closingId = null;
         }
     }
 

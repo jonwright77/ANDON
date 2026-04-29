@@ -3,7 +3,7 @@
 @layout AndonApp.Components.Layout.AdminLayout
 @using AndonApp.Data
 @using AndonApp.Data.Models
-@inject AndonDbContext Db
+@inject IDbContextFactory<AndonDbContext> DbFactory
 @inject NavigationManager Nav
 @rendermode InteractiveServer
 
@@ -90,14 +90,16 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _code = await Db.AndonCodes.FindAsync(Id);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _code = await db.AndonCodes.FindAsync(Id);
         if (_code == null) Nav.NavigateTo("/admin/andon-codes");
         await LoadAsync();
     }
 
     private async Task LoadAsync()
     {
-        _recipients = await Db.AndonCodeRecipients
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _recipients = await db.AndonCodeRecipients
             .Where(r => r.AndonCodeId == Id)
             .OrderBy(r => r.Email)
             .ToListAsync();
@@ -119,23 +121,20 @@
     private async Task AddRecipient()
     {
         var email = _newEmail.Trim().ToLowerInvariant();
-        if (string.IsNullOrEmpty(email) || !email.Contains('@'))
-        {
-            _addError = "Please enter a valid email address.";
-            return;
-        }
-
-        if (await Db.AndonCodeRecipients.AnyAsync(r => r.AndonCodeId == Id && r.Email == email))
-        {
-            _addError = "This email is already a recipient.";
-            return;
-        }
+        try { _ = new System.Net.Mail.MailAddress(email); }
+        catch { _addError = "Please enter a valid email address."; return; }
 
         _saving = true;
         try
         {
-            Db.AndonCodeRecipients.Add(new AndonCodeRecipient { AndonCodeId = Id, Email = email });
-            await Db.SaveChangesAsync();
+            await using var db = await DbFactory.CreateDbContextAsync();
+            if (await db.AndonCodeRecipients.AnyAsync(r => r.AndonCodeId == Id && r.Email == email))
+            {
+                _addError = "This email is already a recipient.";
+                return;
+            }
+            db.AndonCodeRecipients.Add(new AndonCodeRecipient { AndonCodeId = Id, Email = email });
+            await db.SaveChangesAsync();
             CloseAdd();
             await LoadAsync();
         }
@@ -147,8 +146,10 @@
 
     private async Task RemoveRecipient(AndonCodeRecipient r)
     {
-        Db.AndonCodeRecipients.Remove(r);
-        await Db.SaveChangesAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var entity = await db.AndonCodeRecipients.FindAsync(r.Id);
+        if (entity != null) db.AndonCodeRecipients.Remove(entity);
+        await db.SaveChangesAsync();
         await LoadAsync();
     }
 }
