@@ -149,7 +149,8 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
 }
 
 .stat-card {
-  min-width: 360px;
+  flex: 1;
+  min-width: 0;
   border-radius: var(--radius);
   padding: 2rem 2.5rem;
   display: flex;
@@ -964,6 +965,202 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
   padding: 0.1rem 0.35rem;
   text-align: center;
 }
+
+/* ============================================================
+   LINE REVIEW
+   ============================================================ */
+
+.review-date-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.review-date-picker label { font-weight: 600; white-space: nowrap; }
+.review-date-picker .form-control { width: 180px; }
+
+.review-schedule-bar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  background: var(--gray-100);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius);
+  padding: 0.6rem 1rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.9rem;
+  flex-wrap: wrap;
+}
+.review-no-schedule { color: var(--gray-400); font-style: italic; }
+.review-schedule-breaks { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.review-break-tag {
+  background: var(--gray-200);
+  border-radius: 4px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.82rem;
+}
+
+/* Chart */
+.review-chart {
+  margin-bottom: 2rem;
+  overflow-x: auto;
+}
+
+.review-axis-row {
+  display: flex;
+  align-items: stretch;
+  margin-bottom: 0.25rem;
+}
+
+.review-track-row {
+  display: flex;
+  align-items: stretch;
+  margin-bottom: 0.4rem;
+}
+
+.review-track-label {
+  width: 140px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding-right: 0.75rem;
+  color: var(--gray-700);
+}
+
+.review-label-schedule {
+  font-weight: 700;
+  color: var(--gray-900);
+}
+
+.review-track-area {
+  flex: 1;
+  position: relative;
+  height: 36px;
+  border-radius: 4px;
+  overflow: visible;
+}
+
+.review-axis-area {
+  height: 24px;
+}
+
+/* Axis ticks */
+.review-axis-tick {
+  position: absolute;
+  transform: translateX(-50%);
+  font-size: 0.75rem;
+  color: var(--gray-400);
+  white-space: nowrap;
+  top: 4px;
+}
+
+/* Shift fill */
+.review-shift-fill {
+  position: absolute;
+  inset: 0;
+  background: #e8f5e9;
+  border-radius: 4px;
+}
+.review-shift-fill-muted {
+  background: var(--gray-100);
+}
+
+/* Break bands */
+.review-break-band {
+  position: absolute;
+  top: 0; bottom: 0;
+  background: rgba(0,0,0,0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.review-break-band-muted {
+  background: rgba(0,0,0,0.06);
+}
+.review-break-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--gray-700);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 4px;
+}
+
+/* Incident bands */
+.review-incident-band {
+  position: absolute;
+  top: 4px; bottom: 4px;
+  border-radius: 4px;
+  border: 2px solid rgba(255,255,255,0.6);
+}
+.review-band-amber {
+  background: var(--bg-amber);
+  box-shadow: 0 2px 6px rgba(180,90,0,0.35);
+}
+.review-band-red {
+  background: var(--bg-red);
+  box-shadow: 0 2px 6px rgba(180,0,30,0.35);
+}
+.review-band-open {
+  border-right: 3px dashed rgba(255,255,255,0.9);
+}
+
+/* Now line */
+.review-now-line {
+  position: absolute;
+  top: -4px; bottom: -4px;
+  width: 2px;
+  background: var(--gray-900);
+  opacity: 0.6;
+  z-index: 10;
+}
+
+/* Severity badges in label */
+.review-sev-badge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.review-sev-amber { background: var(--bg-amber); color: var(--white); }
+.review-sev-red   { background: var(--bg-red);   color: var(--white); }
+
+.review-code-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.review-no-incidents {
+  padding: 1rem 0 1rem 140px;
+  color: var(--gray-400);
+  font-style: italic;
+}
+
+/* Section heading + count */
+.review-section-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.review-incident-count {
+  font-size: 0.85rem;
+  font-weight: 600;
+  background: var(--gray-200);
+  color: var(--gray-700);
+  border-radius: 999px;
+  padding: 0.1rem 0.65rem;
+}
+
+/* Badge colours used in review table */
+.badge-red   { background: var(--bg-red);   color: var(--white); }
+.badge-amber { background: var(--bg-amber); color: var(--white); }
 
 /* ============================================================
    RESPONSIVE

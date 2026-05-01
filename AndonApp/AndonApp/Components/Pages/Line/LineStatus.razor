@@ -60,7 +60,10 @@ else
                     <div class="stat-card-sub">Line: @exOp.ToString("N0")</div>
                 }
             </div>
-            <div class="stat-card stat-card-empty"></div>
+            <div class="stat-card @GetStatCardClass()">
+                <div class="stat-card-label">Built</div>
+                <div class="stat-card-value">–</div>
+            </div>
         </div>
 
         <div class="board-content">

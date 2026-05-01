@@ -1,0 +1,318 @@
+@page "/admin/lines/{Id:int}/review"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
+@layout AndonApp.Components.Layout.AdminLayout
+@using AndonApp.Data
+@using AndonApp.Data.Models
+@inject IDbContextFactory<AndonDbContext> DbFactory
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Review – @(_line?.Name ?? "Line") – Admin</PageTitle>
+
+<div class="admin-page">
+    <div class="page-header">
+        <div>
+            <a href="/admin/lines" class="back-link">&larr; Back to Production Lines</a>
+            <h1>Day Review – @_line?.Name</h1>
+        </div>
+        <div class="review-date-picker">
+            <label>Date</label>
+            <input type="date"
+                   class="form-control"
+                   value="@_selectedDateStr"
+                   max="@DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd")"
+                   @onchange="OnDateChanged" />
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <p>Loading...</p>
+    }
+    else
+    {
+        <!-- Schedule summary -->
+        @if (_schedule != null && _schedule.IsWorkday)
+        {
+            <div class="review-schedule-bar">
+                <span>Shift: <strong>@Fmt(_schedule.StartTime) – @Fmt(_schedule.EndTime)</strong></span>
+                @if (_schedule.Breaks.Any())
+                {
+                    <span class="review-schedule-breaks">
+                        Breaks:
+                        @foreach (var b in _schedule.Breaks.OrderBy(x => x.StartTime))
+                        {
+                            <span class="review-break-tag">@b.Name (@Fmt(b.StartTime)–@Fmt(b.EndTime))</span>
+                        }
+                    </span>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="review-schedule-bar review-no-schedule">
+                No shift schedule defined for @_selectedDate.DayOfWeek.
+            </div>
+        }
+
+        <!-- Timeline chart -->
+        @if (_schedule != null && _schedule.IsWorkday)
+        {
+            <div class="review-chart">
+
+                <!-- Axis top -->
+                <div class="review-axis-row">
+                    <div class="review-track-label"></div>
+                    <div class="review-track-area review-axis-area">
+                        @foreach (var tick in GetHourMarkers())
+                        {
+                            <span class="review-axis-tick" style="left:@ToPercent(tick).ToString("F2")%">
+                                @Fmt(tick)
+                            </span>
+                        }
+                    </div>
+                </div>
+
+                <!-- Schedule track -->
+                <div class="review-track-row">
+                    <div class="review-track-label review-label-schedule">Schedule</div>
+                    <div class="review-track-area">
+                        <div class="review-shift-fill"></div>
+                        @foreach (var brk in _schedule.Breaks.OrderBy(b => b.StartTime))
+                        {
+                            <div class="review-break-band"
+                                 style="left:@ToPercent(brk.StartTime).ToString("F2")%;width:@BandWidth(brk.StartTime,brk.EndTime).ToString("F2")%"
+                                 title="@brk.Name (@Fmt(brk.StartTime)–@Fmt(brk.EndTime))">
+                                <span class="review-break-label">@brk.Name</span>
+                            </div>
+                        }
+                        @if (IsToday)
+                        {
+                            <div class="review-now-line" style="left:@ToPercent(DateTime.Now.TimeOfDay).ToString("F2")%"></div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Incident rows -->
+                @if (!_incidents.Any())
+                {
+                    <div class="review-no-incidents">No incidents recorded for this day.</div>
+                }
+                else
+                {
+                    @foreach (var incident in _incidents)
+                    {
+                        var startLocal = incident.CreatedAt.ToLocalTime();
+                        var endLocal = incident.ClosedAt.HasValue
+                            ? incident.ClosedAt.Value.ToLocalTime()
+                            : (IsToday ? DateTime.Now : _selectedDate.ToDateTime(TimeOnly.FromTimeSpan(_schedule.EndTime)));
+                        var isOpen = incident.Status == IncidentStatus.OPEN;
+                        var bandClass = incident.Severity == Severity.RED ? "review-band-red" : "review-band-amber";
+
+                        <div class="review-track-row">
+                            <div class="review-track-label">
+                                <span class="review-sev-badge review-sev-@incident.Severity.ToString().ToLower()">
+                                    @incident.Severity
+                                </span>
+                                <span class="review-code-text">@incident.AndonCode.Code</span>
+                            </div>
+                            <div class="review-track-area">
+                                <div class="review-shift-fill review-shift-fill-muted"></div>
+                                @foreach (var brk in _schedule.Breaks.OrderBy(b => b.StartTime))
+                                {
+                                    <div class="review-break-band review-break-band-muted"
+                                         style="left:@ToPercent(brk.StartTime).ToString("F2")%;width:@BandWidth(brk.StartTime,brk.EndTime).ToString("F2")%">
+                                    </div>
+                                }
+                                <div class="review-incident-band @bandClass @(isOpen ? "review-band-open" : "")"
+                                     style="left:@IncidentLeft(startLocal.TimeOfDay).ToString("F2")%;width:@IncidentWidth(startLocal.TimeOfDay,endLocal.TimeOfDay).ToString("F2")%"
+                                     title="@incident.AndonCode.Code – @startLocal.ToString("HH:mm") to @(isOpen ? "Open" : endLocal.ToString("HH:mm"))">
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+
+                <!-- Axis bottom -->
+                <div class="review-axis-row">
+                    <div class="review-track-label"></div>
+                    <div class="review-track-area review-axis-area">
+                        @foreach (var tick in GetHourMarkers())
+                        {
+                            <span class="review-axis-tick" style="left:@ToPercent(tick).ToString("F2")%">
+                                @Fmt(tick)
+                            </span>
+                        }
+                    </div>
+                </div>
+
+            </div>
+        }
+
+        <!-- Incident list -->
+        <h2 class="review-section-title">
+            Incidents on @_selectedDate.ToString("dddd dd MMMM yyyy")
+            <span class="review-incident-count">@_incidents.Count incident@(_incidents.Count == 1 ? "" : "s")</span>
+        </h2>
+
+        @if (!_incidents.Any())
+        {
+            <p class="empty-state">No incidents recorded for this day.</p>
+        }
+        else
+        {
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Severity</th>
+                        <th>ANDON Code</th>
+                        <th>Opened</th>
+                        <th>Closed</th>
+                        <th>Duration</th>
+                        <th>Status</th>
+                        <th>Additional Info</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @{ int idx = 1; }
+                    @foreach (var incident in _incidents)
+                    {
+                        var openedLocal = incident.CreatedAt.ToLocalTime();
+                        var closedLocal = incident.ClosedAt?.ToLocalTime();
+                        var duration = closedLocal.HasValue
+                            ? closedLocal.Value - openedLocal
+                            : (TimeSpan?)null;
+
+                        <tr>
+                            <td>@idx</td>
+                            <td>
+                                <span class="badge @(incident.Severity == Severity.RED ? "badge-red" : "badge-amber")">
+                                    @incident.Severity
+                                </span>
+                            </td>
+                            <td><strong>@incident.AndonCode.Code</strong> @incident.AndonCode.Name</td>
+                            <td>@openedLocal.ToString("HH:mm:ss")</td>
+                            <td>@(closedLocal.HasValue ? closedLocal.Value.ToString("HH:mm:ss") : "–")</td>
+                            <td>@(duration.HasValue ? FormatDuration(duration.Value) : "Ongoing")</td>
+                            <td>
+                                <span class="badge @(incident.Status == IncidentStatus.OPEN ? "badge-red" : "badge-green")">
+                                    @incident.Status
+                                </span>
+                            </td>
+                            <td>@(incident.AdditionalInfo ?? "–")</td>
+                        </tr>
+                        idx++;
+                    }
+                </tbody>
+            </table>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private ProductionLine? _line;
+    private string _selectedDateStr = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
+    private DateOnly _selectedDate = DateOnly.FromDateTime(DateTime.Today);
+    private LineSchedule? _schedule;
+    private List<Incident> _incidents = new();
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _line = await db.ProductionLines.FindAsync(Id);
+        if (_line == null) { Nav.NavigateTo("/admin/lines"); return; }
+        await LoadDataAsync();
+    }
+
+    private async Task OnDateChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParse(e.Value?.ToString(), out var date))
+        {
+            _selectedDate = date;
+            _selectedDateStr = date.ToString("yyyy-MM-dd");
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        _schedule = await db.LineSchedules
+            .Include(s => s.Breaks)
+            .FirstOrDefaultAsync(s => s.ProductionLineId == Id && s.DayOfWeek == _selectedDate.DayOfWeek);
+
+        var dayStart = _selectedDate.ToDateTime(TimeOnly.MinValue);
+        var dayEnd = _selectedDate.ToDateTime(TimeOnly.MaxValue);
+
+        _incidents = await db.Incidents
+            .Include(i => i.AndonCode)
+            .Where(i => i.ProductionLineId == Id &&
+                        i.CreatedAt <= dayEnd &&
+                        (i.ClosedAt == null || i.ClosedAt >= dayStart))
+            .OrderBy(i => i.CreatedAt)
+            .ToListAsync();
+
+        _loading = false;
+    }
+
+    private bool IsToday => _selectedDate == DateOnly.FromDateTime(DateTime.Today);
+
+    private double ToPercent(TimeSpan t)
+    {
+        if (_schedule == null) return 0;
+        var total = (_schedule.EndTime - _schedule.StartTime).TotalMinutes;
+        if (total <= 0) return 0;
+        var clamped = t < _schedule.StartTime ? _schedule.StartTime : (t > _schedule.EndTime ? _schedule.EndTime : t);
+        return (clamped - _schedule.StartTime).TotalMinutes / total * 100;
+    }
+
+    private double BandWidth(TimeSpan start, TimeSpan end)
+    {
+        if (_schedule == null) return 0;
+        var total = (_schedule.EndTime - _schedule.StartTime).TotalMinutes;
+        return (end - start).TotalMinutes / total * 100;
+    }
+
+    private double IncidentLeft(TimeSpan startTime)
+    {
+        if (_schedule == null) return 0;
+        return ToPercent(startTime);
+    }
+
+    private double IncidentWidth(TimeSpan startTime, TimeSpan endTime)
+    {
+        if (_schedule == null) return 0.5;
+        var total = (_schedule.EndTime - _schedule.StartTime).TotalMinutes;
+        var s = startTime < _schedule.StartTime ? _schedule.StartTime : startTime;
+        var e = endTime > _schedule.EndTime ? _schedule.EndTime : endTime;
+        if (e <= s) return 0.5;
+        return Math.Max(0.5, (e - s).TotalMinutes / total * 100);
+    }
+
+    private List<TimeSpan> GetHourMarkers()
+    {
+        if (_schedule == null) return new();
+        var markers = new List<TimeSpan>();
+        var t = TimeSpan.FromHours(Math.Ceiling(_schedule.StartTime.TotalHours));
+        while (t <= _schedule.EndTime)
+        {
+            markers.Add(t);
+            t = t.Add(TimeSpan.FromHours(1));
+        }
+        return markers;
+    }
+
+    private static string Fmt(TimeSpan t) => t.ToString(@"hh\:mm");
+
+    private static string FormatDuration(TimeSpan d)
+    {
+        if (d.TotalHours >= 1) return $"{(int)d.TotalHours}h {d.Minutes:D2}m";
+        return $"{d.Minutes}m {d.Seconds:D2}s";
+    }
+}
