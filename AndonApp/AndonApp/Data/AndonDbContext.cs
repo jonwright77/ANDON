@@ -14,6 +14,7 @@ public class AndonDbContext : DbContext
     public DbSet<AdminUser> AdminUsers => Set<AdminUser>();
     public DbSet<LineSchedule> LineSchedules => Set<LineSchedule>();
     public DbSet<ScheduleBreak> ScheduleBreaks => Set<ScheduleBreak>();
+    public DbSet<LineTarget> LineTargets => Set<LineTarget>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -82,6 +83,17 @@ public class AndonDbContext : DbContext
             .HasOne(b => b.LineSchedule)
             .WithMany(s => s.Breaks)
             .HasForeignKey(b => b.LineScheduleId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // LineTargets: one target per line per day
+        modelBuilder.Entity<LineTarget>()
+            .HasIndex(t => new { t.ProductionLineId, t.Date })
+            .IsUnique();
+
+        modelBuilder.Entity<LineTarget>()
+            .HasOne(t => t.ProductionLine)
+            .WithMany()
+            .HasForeignKey(t => t.ProductionLineId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

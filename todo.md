@@ -33,7 +33,7 @@
 - [x] **B. Elapsed working minutes display in title bar**
   Added `GetElapsedMinutes()` — `(Now - StartTime)` in minutes, clamped to 0 before shift start and to total shift duration after shift end, no break deduction. Displayed as "ELAPSED" in the second stat card, formatted via the shared `FormatMinutes()` helper. Updates every clock tick.
 
-- [ ] **C. Target Calendar per Production Line**
+- [x] **C. Target Calendar per Production Line**
   Allow admins to set a daily build target for each production line, stored in the database and viewed as a month-at-a-time calendar.
 
   **New model:** `LineTarget` — `Id`, `ProductionLineId` (FK), `Date` (date only, no time), `Target` (int). Unique index on `(ProductionLineId, Date)`.

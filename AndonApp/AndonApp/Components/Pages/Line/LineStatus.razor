@@ -44,7 +44,10 @@ else
                 <div class="stat-card-label">Elapsed</div>
                 <div class="stat-card-value">@(GetElapsedMinutes() is int e ? FormatMinutes(e) : "–")</div>
             </div>
-            <div class="stat-card stat-card-empty"></div>
+            <div class="stat-card @GetStatCardClass()">
+                <div class="stat-card-label">Target</div>
+                <div class="stat-card-value">@(_todayTarget.HasValue ? _todayTarget.Value.ToString("N0") : "–")</div>
+            </div>
             <div class="stat-card stat-card-empty"></div>
             <div class="stat-card stat-card-empty"></div>
         </div>
@@ -185,10 +188,11 @@ else
 
     private HubConnection? _hubConnection;
 
-    // Clock + schedule
+    // Clock + schedule + target
     private DateTime _now = DateTime.Now;
     private DayOfWeek _loadedDay;
     private LineSchedule? _todaySchedule;
+    private int? _todayTarget;
     private Timer? _clockTimer;
 
     protected override async Task OnInitializedAsync()
@@ -206,6 +210,7 @@ else
         _authorized = true;
         await LoadIncidentsAsync();
         await LoadScheduleAsync();
+        await LoadTodayTargetAsync();
 
         await using var db2 = await DbFactory.CreateDbContextAsync();
         _activeCodes = await db2.AndonCodes
@@ -242,6 +247,17 @@ else
         _todaySchedule = await db.LineSchedules
             .Include(s => s.Breaks)
             .FirstOrDefaultAsync(s => s.ProductionLineId == _line.Id && s.DayOfWeek == _loadedDay);
+        await LoadTodayTargetAsync();
+    }
+
+    private async Task LoadTodayTargetAsync()
+    {
+        if (_line == null) return;
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var t = await db.LineTargets
+            .FirstOrDefaultAsync(t => t.ProductionLineId == _line.Id && t.Date == today);
+        _todayTarget = t?.Target;
     }
 
     private string GetWorkStatus()

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AndonApp")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+dd2745ba9bd213a77795f01d10fd561b10a3f51b")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a041d1fb748fc6d6fa48a6ae98d3621368313021")]
 [assembly: System.Reflection.AssemblyProductAttribute("AndonApp")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AndonApp")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

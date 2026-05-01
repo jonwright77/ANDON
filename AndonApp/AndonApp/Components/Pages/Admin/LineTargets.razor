@@ -1,0 +1,199 @@
+@page "/admin/lines/{Id:int}/targets"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
+@layout AndonApp.Components.Layout.AdminLayout
+@using AndonApp.Data
+@using AndonApp.Data.Models
+@inject IDbContextFactory<AndonDbContext> DbFactory
+@inject NavigationManager Nav
+@rendermode InteractiveServer
+
+<PageTitle>Targets – @(_line?.Name ?? "Line") – Admin</PageTitle>
+
+<div class="admin-page">
+    <div class="page-header">
+        <div>
+            <a href="/admin/lines" class="back-link">&larr; Back to Production Lines</a>
+            <h1>Build Targets – @_line?.Name</h1>
+        </div>
+    </div>
+
+    @if (_days == null)
+    {
+        <p>Loading...</p>
+    }
+    else
+    {
+        <div class="calendar-nav">
+            <button class="btn btn-secondary" @onclick="PrevMonth">&larr;</button>
+            <span class="calendar-month-label">@(new DateTime(_year, _month, 1).ToString("MMMM yyyy"))</span>
+            <button class="btn btn-secondary" @onclick="NextMonth">&rarr;</button>
+        </div>
+
+        <div class="calendar-grid">
+            @foreach (var heading in new[] { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" })
+            {
+                <div class="calendar-heading">@heading</div>
+            }
+
+            @foreach (var day in _days)
+            {
+                <div class="calendar-cell @(!day.IsCurrentMonth ? "calendar-cell-other" : "") @(day.Date == DateOnly.FromDateTime(DateTime.Today) ? "calendar-cell-today" : "")">
+                    <div class="calendar-day-number">@day.Date.Day</div>
+
+                    @if (day.IsCurrentMonth)
+                    {
+                        @if (day.IsEditing)
+                        {
+                            <input class="calendar-target-input"
+                                   type="number"
+                                   min="0"
+                                   @bind="day.EditValue"
+                                   @onkeydown="e => HandleKey(e, day)" />
+                            <div class="calendar-edit-actions">
+                                <button class="btn btn-sm btn-primary" @onclick="() => SaveTarget(day)">Save</button>
+                                <button class="btn btn-sm btn-secondary" @onclick="() => CancelEdit(day)">Cancel</button>
+                                @if (day.Target.HasValue)
+                                {
+                                    <button class="btn btn-sm btn-danger" @onclick="() => ClearTarget(day)">Clear</button>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="calendar-target @(day.Target.HasValue ? "calendar-target-set" : "calendar-target-empty")"
+                                 @onclick="() => StartEdit(day)">
+                                @(day.Target.HasValue ? day.Target.Value.ToString("N0") : "+")
+                            </div>
+                        }
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private ProductionLine? _line;
+    private List<CalendarDay>? _days;
+    private int _year = DateTime.Today.Year;
+    private int _month = DateTime.Today.Month;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _line = await db.ProductionLines.FindAsync(Id);
+        if (_line == null) { Nav.NavigateTo("/admin/lines"); return; }
+        await LoadCalendarAsync();
+    }
+
+    private async Task LoadCalendarAsync()
+    {
+        var start = new DateOnly(_year, _month, 1);
+        var end = start.AddMonths(1).AddDays(-1);
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var targets = await db.LineTargets
+            .Where(t => t.ProductionLineId == Id && t.Date >= start && t.Date <= end)
+            .ToListAsync();
+
+        // Monday-based grid — calculate offset
+        var firstDow = (int)start.DayOfWeek;
+        var offset = firstDow == 0 ? 6 : firstDow - 1;
+        var gridStart = start.AddDays(-offset);
+
+        _days = new List<CalendarDay>();
+        for (int i = 0; i < 42; i++)
+        {
+            var date = gridStart.AddDays(i);
+            var t = targets.FirstOrDefault(x => x.Date == date);
+            _days.Add(new CalendarDay
+            {
+                Date = date,
+                IsCurrentMonth = date.Month == _month,
+                Target = t?.Target,
+                TargetId = t?.Id
+            });
+        }
+    }
+
+    private async Task PrevMonth()
+    {
+        if (_month == 1) { _month = 12; _year--; } else _month--;
+        await LoadCalendarAsync();
+    }
+
+    private async Task NextMonth()
+    {
+        if (_month == 12) { _month = 1; _year++; } else _month++;
+        await LoadCalendarAsync();
+    }
+
+    private void StartEdit(CalendarDay day)
+    {
+        foreach (var d in _days!) d.IsEditing = false;
+        day.EditValue = day.Target?.ToString() ?? "";
+        day.IsEditing = true;
+    }
+
+    private void CancelEdit(CalendarDay day)
+    {
+        day.IsEditing = false;
+    }
+
+    private async Task HandleKey(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e, CalendarDay day)
+    {
+        if (e.Key == "Enter") await SaveTarget(day);
+        if (e.Key == "Escape") CancelEdit(day);
+    }
+
+    private async Task SaveTarget(CalendarDay day)
+    {
+        if (!int.TryParse(day.EditValue, out var value) || value < 0)
+        {
+            CancelEdit(day);
+            return;
+        }
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        if (day.TargetId == null)
+        {
+            var entity = new LineTarget { ProductionLineId = Id, Date = day.Date, Target = value };
+            db.LineTargets.Add(entity);
+            await db.SaveChangesAsync();
+            day.TargetId = entity.Id;
+        }
+        else
+        {
+            var entity = await db.LineTargets.FindAsync(day.TargetId);
+            if (entity != null) { entity.Target = value; await db.SaveChangesAsync(); }
+        }
+
+        day.Target = value;
+        day.IsEditing = false;
+    }
+
+    private async Task ClearTarget(CalendarDay day)
+    {
+        if (day.TargetId == null) { day.IsEditing = false; return; }
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var entity = await db.LineTargets.FindAsync(day.TargetId);
+        if (entity != null) db.LineTargets.Remove(entity);
+        await db.SaveChangesAsync();
+        day.Target = null;
+        day.TargetId = null;
+        day.IsEditing = false;
+    }
+
+    private class CalendarDay
+    {
+        public DateOnly Date { get; set; }
+        public bool IsCurrentMonth { get; set; }
+        public int? Target { get; set; }
+        public int? TargetId { get; set; }
+        public bool IsEditing { get; set; }
+        public string EditValue { get; set; } = "";
+    }
+}
