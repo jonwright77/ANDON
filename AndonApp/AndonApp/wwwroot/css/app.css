@@ -144,17 +144,17 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
 .stat-row {
   display: flex;
   flex-shrink: 0;
-  gap: 1rem;
+  gap: 1.5rem;
   padding: 1.5rem 1.75rem 0.75rem;
 }
 
 .stat-card {
-  min-width: 180px;
+  min-width: 360px;
   border-radius: var(--radius);
-  padding: 1rem 1.25rem;
+  padding: 2rem 2.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.5rem;
   box-shadow: 0 4px 16px rgba(0,0,0,0.2);
   border: 3px solid rgba(255,255,255,0.4);
   color: var(--white);
@@ -171,7 +171,7 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
 }
 
 .stat-card-label {
-  font-size: 0.85rem;
+  font-size: 1.7rem;
   font-weight: 800;
   letter-spacing: 0.15em;
   text-transform: uppercase;
@@ -179,14 +179,15 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
 }
 
 .stat-card-value {
-  font-size: 1.5rem;
+  font-size: 3rem;
   font-weight: 700;
   color: var(--white);
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .stat-card-sub {
-  font-size: 0.8rem;
+  font-size: 1.6rem;
   color: rgba(255,255,255,0.7);
   font-variant-numeric: tabular-nums;
 }
