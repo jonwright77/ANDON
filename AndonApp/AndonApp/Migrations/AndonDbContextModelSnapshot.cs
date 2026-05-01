@@ -100,6 +100,18 @@ namespace AndonApp.Migrations
                 b.ToTable("LineTargets");
             });
 
+            modelBuilder.Entity("AndonApp.Data.Models.LineOperatorTarget", b =>
+            {
+                b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int");
+                SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                b.Property<int>("ProductionLineId").HasColumnType("int");
+                b.Property<DateOnly>("Date").HasColumnType("date");
+                b.Property<int>("Target").HasColumnType("int");
+                b.HasKey("Id");
+                b.HasIndex("ProductionLineId", "Date").IsUnique();
+                b.ToTable("LineOperatorTargets");
+            });
+
             modelBuilder.Entity("AndonApp.Data.Models.LineSchedule", b =>
             {
                 b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int");
@@ -166,6 +178,16 @@ namespace AndonApp.Migrations
             });
 
             modelBuilder.Entity("AndonApp.Data.Models.LineTarget", b =>
+            {
+                b.HasOne("AndonApp.Data.Models.ProductionLine", "ProductionLine")
+                    .WithMany()
+                    .HasForeignKey("ProductionLineId")
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .IsRequired();
+                b.Navigation("ProductionLine");
+            });
+
+            modelBuilder.Entity("AndonApp.Data.Models.LineOperatorTarget", b =>
             {
                 b.HasOne("AndonApp.Data.Models.ProductionLine", "ProductionLine")
                     .WithMany()

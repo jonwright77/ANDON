@@ -46,6 +46,18 @@
 
   **Data notes:** `Date` should be stored as `DateOnly` (EF Core 6+ supports this natively for SQL Server `date` columns). Targets are optional per day — days with no row have no target.
 
+- [x] **D. Expected build count card**
+  Show an "EXPECTED" value in the fourth stat card. Calculated as `(Elapsed ÷ Scheduled) × Target`, giving the number of units that should have been built by this point in the day based on linear progress through the shift. Requires all three of Elapsed, Scheduled, and Target to be available — display `–` if any are missing or Scheduled is zero. Round to the nearest whole number. Updates every clock tick alongside Elapsed.
+
+- [x] **E. Line Target button on production line status board**
+  Add a "Line Target" button to the bottom-left of the `LineStatus.razor` screen, mirroring the position of the existing "+ New Incident" button on the bottom-right. Clicking it opens a modal allowing the end user to enter a target value for the current day. The value is saved to the existing `LineTargets` table (same model used by the admin Target Calendar), so it appears in both places.
+
+  **Behaviour:**
+  - If a target already exists for today, the modal pre-populates with the current value so it can be updated or cleared.
+  - On save, `_todayTarget` is updated immediately so the TARGET and EXPECTED cards refresh without a page reload.
+  - No admin login required — the line access token is sufficient authorisation.
+  - The admin Target Calendar should display any target set via this button unchanged — no schema or calendar UI changes needed.
+
 ## Deferred
 
 - [ ] **9. No brute-force protection on admin login**

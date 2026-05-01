@@ -346,6 +346,28 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
   transform: translateY(-2px);
 }
 
+.btn-line-target {
+  position: fixed;
+  bottom: 2.5rem;
+  left: 2.5rem;
+  background: rgba(0,0,0,0.55);
+  color: var(--white);
+  font-size: 1.1rem;
+  font-weight: 700;
+  padding: 1rem 2rem;
+  border: 2px solid rgba(255,255,255,0.5);
+  border-radius: 999px;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: background 0.2s, transform 0.1s;
+  z-index: 50;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+.btn-line-target:hover {
+  background: rgba(0,0,0,0.75);
+  transform: translateY(-2px);
+}
+
 /* Access denied */
 .line-unauthorized {
   min-height: 100vh;
@@ -930,6 +952,16 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
   display: flex;
   gap: 0.25rem;
   flex-wrap: wrap;
+}
+
+.calendar-operator-target {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--gray-700);
+  background: var(--gray-100);
+  border-radius: 3px;
+  padding: 0.1rem 0.35rem;
+  text-align: center;
 }
 
 /* ============================================================

@@ -47,8 +47,19 @@ else
             <div class="stat-card @GetStatCardClass()">
                 <div class="stat-card-label">Target</div>
                 <div class="stat-card-value">@(_todayTarget.HasValue ? _todayTarget.Value.ToString("N0") : "–")</div>
+                @if (_todayOperatorTarget.HasValue)
+                {
+                    <div class="stat-card-sub">Line: @_todayOperatorTarget.Value.ToString("N0")</div>
+                }
             </div>
-            <div class="stat-card stat-card-empty"></div>
+            <div class="stat-card @GetStatCardClass()">
+                <div class="stat-card-label">Expected</div>
+                <div class="stat-card-value">@(GetExpected() is int ex ? ex.ToString("N0") : "–")</div>
+                @if (GetExpectedOperator() is int exOp)
+                {
+                    <div class="stat-card-sub">Line: @exOp.ToString("N0")</div>
+                }
+            </div>
             <div class="stat-card stat-card-empty"></div>
         </div>
 
@@ -105,6 +116,9 @@ else
 
         <button class="btn-new-incident" @onclick="ShowNewIncidentModal" @onclick:stopPropagation>
             + New Incident
+        </button>
+        <button class="btn-line-target" @onclick="ShowTargetModal" @onclick:stopPropagation>
+            &#9678; Line Target
         </button>
     </div>
 }
@@ -168,6 +182,42 @@ else
     </div>
 }
 
+@if (_showTargetModal)
+{
+    <div class="modal-backdrop" @onclick="HideTargetModal">
+        <div class="modal modal-sm" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h2>Line Target – @DateTime.Today.ToString("dd MMM yyyy")</h2>
+                <button class="modal-close" @onclick="HideTargetModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(_targetModalError))
+                {
+                    <div class="alert alert-error">@_targetModalError</div>
+                }
+                <div class="form-group">
+                    <label>Target Units *</label>
+                    <input class="form-control"
+                           type="number"
+                           min="0"
+                           @bind="_targetEditValue"
+                           placeholder="e.g. 100" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="HideTargetModal">Cancel</button>
+                @if (_todayOperatorTarget.HasValue)
+                {
+                    <button class="btn btn-danger" @onclick="ClearLineTarget" disabled="@_savingTarget">Clear</button>
+                }
+                <button class="btn btn-primary" @onclick="SaveLineTarget" disabled="@_savingTarget">
+                    @(_savingTarget ? "Saving..." : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     [Parameter] public string Slug { get; set; } = string.Empty;
     [SupplyParameterFromQuery] public string? Token { get; set; }
@@ -185,6 +235,14 @@ else
     private int? _closingId;
     private string? _closeError;
     private int? _closeErrorId;
+
+    private bool _showTargetModal;
+    private string _targetEditValue = string.Empty;
+    private string? _targetModalError;
+    private bool _savingTarget;
+    private int? _todayTargetId;
+    private int? _todayOperatorTarget;
+    private int? _todayOperatorTargetId;
 
     private HubConnection? _hubConnection;
 
@@ -255,9 +313,16 @@ else
         if (_line == null) return;
         var today = DateOnly.FromDateTime(DateTime.Today);
         await using var db = await DbFactory.CreateDbContextAsync();
-        var t = await db.LineTargets
+
+        var adminT = await db.LineTargets
             .FirstOrDefaultAsync(t => t.ProductionLineId == _line.Id && t.Date == today);
-        _todayTarget = t?.Target;
+        _todayTarget = adminT?.Target;
+        _todayTargetId = adminT?.Id;
+
+        var opT = await db.LineOperatorTargets
+            .FirstOrDefaultAsync(t => t.ProductionLineId == _line.Id && t.Date == today);
+        _todayOperatorTarget = opT?.Target;
+        _todayOperatorTargetId = opT?.Id;
     }
 
     private string GetWorkStatus()
@@ -290,6 +355,23 @@ else
         var total = (_todaySchedule.EndTime - _todaySchedule.StartTime).TotalMinutes;
         var breakMins = _todaySchedule.Breaks.Sum(b => (b.EndTime - b.StartTime).TotalMinutes);
         return (int)(total - breakMins);
+    }
+
+    private int? GetExpected()
+    {
+        var scheduled = GetTotalWorkingMinutes();
+        var elapsed = GetElapsedMinutes();
+        if (scheduled is null or 0 || elapsed is null || !_todayTarget.HasValue) return null;
+        return (int)Math.Round((double)elapsed.Value / scheduled.Value * _todayTarget.Value);
+    }
+
+    private int? GetExpectedOperator()
+    {
+        if (!_todayOperatorTarget.HasValue) return null;
+        var scheduled = GetTotalWorkingMinutes();
+        var elapsed = GetElapsedMinutes();
+        if (scheduled is null or 0 || elapsed is null) return null;
+        return (int)Math.Round((double)elapsed.Value / scheduled.Value * _todayOperatorTarget.Value);
     }
 
     private int? GetElapsedMinutes()
@@ -397,6 +479,74 @@ else
     {
         _showModal = false;
         _modalError = null;
+    }
+
+    private void ShowTargetModal()
+    {
+        _targetEditValue = (_todayOperatorTarget ?? _todayTarget)?.ToString() ?? string.Empty;
+        _targetModalError = null;
+        _showTargetModal = true;
+    }
+
+    private void HideTargetModal()
+    {
+        _showTargetModal = false;
+        _targetModalError = null;
+    }
+
+    private async Task SaveLineTarget()
+    {
+        if (!int.TryParse(_targetEditValue, out var value) || value < 0)
+        {
+            _targetModalError = "Please enter a valid positive number.";
+            return;
+        }
+
+        _savingTarget = true;
+        _targetModalError = null;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            if (_todayOperatorTargetId == null)
+            {
+                var entity = new AndonApp.Data.Models.LineOperatorTarget
+                {
+                    ProductionLineId = _line!.Id,
+                    Date = DateOnly.FromDateTime(DateTime.Today),
+                    Target = value
+                };
+                db.LineOperatorTargets.Add(entity);
+                await db.SaveChangesAsync();
+                _todayOperatorTargetId = entity.Id;
+            }
+            else
+            {
+                var entity = await db.LineOperatorTargets.FindAsync(_todayOperatorTargetId);
+                if (entity != null) { entity.Target = value; await db.SaveChangesAsync(); }
+            }
+            _todayOperatorTarget = value;
+            HideTargetModal();
+        }
+        finally { _savingTarget = false; }
+    }
+
+    private async Task ClearLineTarget()
+    {
+        _savingTarget = true;
+        try
+        {
+            if (_todayOperatorTargetId != null)
+            {
+                await using var db = await DbFactory.CreateDbContextAsync();
+                var entity = await db.LineOperatorTargets.FindAsync(_todayOperatorTargetId);
+                if (entity != null) db.LineOperatorTargets.Remove(entity);
+                await db.SaveChangesAsync();
+            }
+            _todayOperatorTarget = null;
+            _todayOperatorTargetId = null;
+            HideTargetModal();
+        }
+        finally { _savingTarget = false; }
     }
 
     private async Task SubmitIncident()

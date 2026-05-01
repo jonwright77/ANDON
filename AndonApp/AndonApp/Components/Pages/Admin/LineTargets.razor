@@ -64,6 +64,12 @@
                                  @onclick="() => StartEdit(day)">
                                 @(day.Target.HasValue ? day.Target.Value.ToString("N0") : "+")
                             </div>
+                            @if (day.OperatorTarget.HasValue)
+                            {
+                                <div class="calendar-operator-target">
+                                    Line: @day.OperatorTarget.Value.ToString("N0")
+                                </div>
+                            }
                         }
                     }
                 </div>
@@ -97,8 +103,10 @@
         var targets = await db.LineTargets
             .Where(t => t.ProductionLineId == Id && t.Date >= start && t.Date <= end)
             .ToListAsync();
+        var opTargets = await db.LineOperatorTargets
+            .Where(t => t.ProductionLineId == Id && t.Date >= start && t.Date <= end)
+            .ToListAsync();
 
-        // Monday-based grid — calculate offset
         var firstDow = (int)start.DayOfWeek;
         var offset = firstDow == 0 ? 6 : firstDow - 1;
         var gridStart = start.AddDays(-offset);
@@ -108,12 +116,14 @@
         {
             var date = gridStart.AddDays(i);
             var t = targets.FirstOrDefault(x => x.Date == date);
+            var op = opTargets.FirstOrDefault(x => x.Date == date);
             _days.Add(new CalendarDay
             {
                 Date = date,
                 IsCurrentMonth = date.Month == _month,
                 Target = t?.Target,
-                TargetId = t?.Id
+                TargetId = t?.Id,
+                OperatorTarget = op?.Target
             });
         }
     }
@@ -193,6 +203,7 @@
         public bool IsCurrentMonth { get; set; }
         public int? Target { get; set; }
         public int? TargetId { get; set; }
+        public int? OperatorTarget { get; set; }
         public bool IsEditing { get; set; }
         public string EditValue { get; set; } = "";
     }
