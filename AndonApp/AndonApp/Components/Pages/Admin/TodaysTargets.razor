@@ -1,0 +1,186 @@
+@page "/admin/todays-targets"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
+@layout AndonApp.Components.Layout.AdminLayout
+@using AndonApp.Data
+@using AndonApp.Data.Models
+@inject IDbContextFactory<AndonDbContext> DbFactory
+@rendermode InteractiveServer
+
+<PageTitle>Today's Targets – Admin</PageTitle>
+
+<div class="admin-page">
+    <div class="page-header">
+        <h1>Today's Targets</h1>
+        <span class="todays-date">@DateTime.Today.ToString("dddd dd MMMM yyyy")</span>
+    </div>
+
+    @if (_rows == null)
+    {
+        <p>Loading...</p>
+    }
+    else if (!_rows.Any())
+    {
+        <p class="empty-state">No active production lines configured.</p>
+    }
+    else
+    {
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Production Line</th>
+                    <th>Working Hours</th>
+                    <th>Scheduled Mins</th>
+                    <th>Target</th>
+                    <th>Line Target</th>
+                    <th>Variance</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in _rows)
+                {
+                    var variance = row.LineTarget.HasValue && row.AdminTarget.HasValue
+                        ? row.LineTarget.Value - row.AdminTarget.Value
+                        : (int?)null;
+
+                    <tr>
+                        <td><strong>@row.LineName</strong></td>
+                        <td>
+                            @if (row.Schedule != null && row.Schedule.IsWorkday)
+                            {
+                                <span>@Fmt(row.Schedule.StartTime) – @Fmt(row.Schedule.EndTime)</span>
+                                @if (row.Schedule.Breaks.Any())
+                                {
+                                    <div class="todays-breaks">
+                                        @foreach (var b in row.Schedule.Breaks.OrderBy(x => x.StartTime))
+                                        {
+                                            <span class="review-break-tag">@b.Name @Fmt(b.StartTime)–@Fmt(b.EndTime)</span>
+                                        }
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <span class="text-muted">No schedule</span>
+                            }
+                        </td>
+                        <td>
+                            @if (row.ScheduledMinutes.HasValue)
+                            {
+                                <span>@FormatMinutes(row.ScheduledMinutes.Value)</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">–</span>
+                            }
+                        </td>
+                        <td>
+                            @if (row.AdminTarget.HasValue)
+                            {
+                                <strong class="todays-target-value">@row.AdminTarget.Value.ToString("N0")</strong>
+                            }
+                            else
+                            {
+                                <span class="text-muted">–</span>
+                            }
+                        </td>
+                        <td>
+                            @if (row.LineTarget.HasValue)
+                            {
+                                <strong class="todays-target-value">@row.LineTarget.Value.ToString("N0")</strong>
+                            }
+                            else
+                            {
+                                <span class="text-muted">–</span>
+                            }
+                        </td>
+                        <td>
+                            @if (variance.HasValue)
+                            {
+                                <span class="todays-variance @(variance.Value > 0 ? "variance-up" : variance.Value < 0 ? "variance-down" : "variance-zero")">
+                                    @(variance.Value > 0 ? "+" : "")@variance.Value.ToString("N0")
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">–</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@code {
+    private List<LineRow>? _rows;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var todayDow = DateTime.Today.DayOfWeek;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var lines = await db.ProductionLines
+            .Where(l => l.IsActive)
+            .OrderBy(l => l.Name)
+            .ToListAsync();
+
+        var lineIds = lines.Select(l => l.Id).ToList();
+
+        var schedules = await db.LineSchedules
+            .Include(s => s.Breaks)
+            .Where(s => lineIds.Contains(s.ProductionLineId) && s.DayOfWeek == todayDow)
+            .ToListAsync();
+
+        var adminTargets = await db.LineTargets
+            .Where(t => lineIds.Contains(t.ProductionLineId) && t.Date == today)
+            .ToListAsync();
+
+        var opTargets = await db.LineOperatorTargets
+            .Where(t => lineIds.Contains(t.ProductionLineId) && t.Date == today)
+            .ToListAsync();
+
+        _rows = lines.Select(line =>
+        {
+            var schedule = schedules.FirstOrDefault(s => s.ProductionLineId == line.Id);
+            int? scheduledMins = null;
+            if (schedule != null && schedule.IsWorkday)
+            {
+                var total = (schedule.EndTime - schedule.StartTime).TotalMinutes;
+                var breakMins = schedule.Breaks.Sum(b => (b.EndTime - b.StartTime).TotalMinutes);
+                scheduledMins = (int)(total - breakMins);
+            }
+
+            return new LineRow
+            {
+                LineName = line.Name,
+                Schedule = schedule,
+                ScheduledMinutes = scheduledMins,
+                AdminTarget = adminTargets.FirstOrDefault(t => t.ProductionLineId == line.Id)?.Target,
+                LineTarget = opTargets.FirstOrDefault(t => t.ProductionLineId == line.Id)?.Target
+            };
+        }).ToList();
+    }
+
+    private static string Fmt(TimeSpan t) => t.ToString(@"hh\:mm");
+
+    private static string FormatMinutes(int minutes)
+    {
+        var h = minutes / 60;
+        var m = minutes % 60;
+        return h > 0 ? $"{h}h {m:D2}m" : $"{m}m";
+    }
+
+    private class LineRow
+    {
+        public string LineName { get; set; } = string.Empty;
+        public LineSchedule? Schedule { get; set; }
+        public int? ScheduledMinutes { get; set; }
+        public int? AdminTarget { get; set; }
+        public int? LineTarget { get; set; }
+    }
+}

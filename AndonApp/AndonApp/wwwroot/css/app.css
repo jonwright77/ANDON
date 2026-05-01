@@ -967,6 +967,39 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
 }
 
 /* ============================================================
+   TODAY'S TARGETS
+   ============================================================ */
+
+.todays-date {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--gray-400);
+}
+
+.todays-target-value {
+  font-size: 1.1rem;
+}
+
+.todays-breaks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+}
+
+.text-muted {
+  color: var(--gray-400);
+}
+
+.todays-variance {
+  font-weight: 700;
+  font-size: 1rem;
+}
+.variance-up   { color: #065f46; }
+.variance-down { color: #b00020; }
+.variance-zero { color: var(--gray-400); }
+
+/* ============================================================
    LINE REVIEW
    ============================================================ */
 
