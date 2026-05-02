@@ -9,6 +9,7 @@ public interface IEmailService
 {
     Task SendIncidentOpenedAsync(Incident incident);
     Task SendIncidentClosedAsync(Incident incident);
+    Task<(bool Success, string Message)> TestSmtpAsync(string host, int port, string? user, string? pass, string from, string to);
 }
 
 public class EmailService : IEmailService
@@ -61,6 +62,34 @@ public class EmailService : IEmailService
             --
             ANDON Incident Management System
             """;
+    }
+
+    public async Task<(bool Success, string Message)> TestSmtpAsync(
+        string host, int port, string? user, string? pass, string from, string to)
+    {
+        try
+        {
+            var message = new MimeMessage();
+            message.From.Add(MailboxAddress.Parse(from));
+            message.To.Add(MailboxAddress.Parse(to));
+            message.Subject = "[ANDON] SMTP Configuration Test";
+            message.Body = new TextPart("plain")
+            {
+                Text = $"This is a test email from the ANDON system.\n\nSent: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC"
+            };
+
+            using var client = new SmtpClient();
+            await client.ConnectAsync(host, port, SecureSocketOptions.StartTlsWhenAvailable);
+            if (!string.IsNullOrEmpty(user))
+                await client.AuthenticateAsync(user, pass);
+            await client.SendAsync(message);
+            await client.DisconnectAsync(true);
+            return (true, $"Test email sent successfully to {to}.");
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
     }
 
     private async Task SendToRecipientsAsync(Incident incident, string subject, string body)

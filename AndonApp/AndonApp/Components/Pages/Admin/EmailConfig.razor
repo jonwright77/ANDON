@@ -1,0 +1,241 @@
+@page "/admin/email-settings"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
+@layout AndonApp.Components.Layout.AdminLayout
+@using AndonApp.Services
+@inject IConfiguration Config
+@inject IEmailService EmailService
+@inject IWebHostEnvironment Env
+@rendermode InteractiveServer
+
+<PageTitle>Email Settings – Admin</PageTitle>
+
+<div class="admin-page">
+    <div class="page-header">
+        <h1>Email Settings</h1>
+    </div>
+
+    <div class="email-status-bar @(_mode == "Smtp" ? "email-status-active" : "email-status-logonly")">
+        @if (_mode == "Smtp")
+        {
+            <span>&#10003; <strong>SMTP mode</strong> — emails will be sent via <strong>@(string.IsNullOrWhiteSpace(_host) ? "(no host configured)" : _host)</strong>.</span>
+        }
+        else
+        {
+            <span>&#9432; <strong>Log Only mode</strong> — emails are written to the application log and not sent.</span>
+        }
+    </div>
+
+    <div class="erp-form-card">
+        <h2 class="settings-section-title">General</h2>
+
+        @if (!string.IsNullOrEmpty(_saveSuccess))
+        {
+            <div class="alert alert-success">@_saveSuccess</div>
+        }
+        @if (!string.IsNullOrEmpty(_saveError))
+        {
+            <div class="alert alert-error">@_saveError</div>
+        }
+
+        <div class="form-group">
+            <label>Mode</label>
+            <select class="form-control" style="max-width:220px" @bind="_mode">
+                <option value="LogOnly">Log Only (no emails sent)</option>
+                <option value="Smtp">SMTP (send emails)</option>
+            </select>
+            <small class="help-text">Switch to SMTP when you are ready to send real emails.</small>
+        </div>
+
+        <div class="form-group">
+            <label>From Address</label>
+            <input class="form-control" style="max-width:360px" type="email"
+                   @bind="_from" placeholder="andon@yourdomain.com" />
+            <small class="help-text">The address that appears in the From field of every email.</small>
+        </div>
+    </div>
+
+    <div class="erp-form-card @(_mode != "Smtp" ? "settings-card-muted" : "")">
+        <h2 class="settings-section-title">SMTP Server</h2>
+        <small class="help-text" style="display:block;margin-bottom:1rem">
+            These settings are only used when mode is set to SMTP.
+        </small>
+
+        <div class="email-smtp-grid">
+            <div class="form-group">
+                <label>Host</label>
+                <input class="form-control" type="text"
+                       @bind="_host" placeholder="smtp.office365.com" />
+            </div>
+            <div class="form-group">
+                <label>Port</label>
+                <input class="form-control" type="number" min="1" max="65535"
+                       @bind="_port" style="max-width:100px" />
+            </div>
+        </div>
+
+        <div class="email-smtp-grid">
+            <div class="form-group">
+                <label>Username <small>(leave blank for unauthenticated relay)</small></label>
+                <input class="form-control" type="text"
+                       @bind="_user" placeholder="your-account@yourdomain.com" />
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <div class="input-reveal">
+                    <input class="form-control" type="@(_showPass ? "text" : "password")"
+                           @bind="_pass" placeholder="••••••••" />
+                    <button type="button" class="btn btn-sm btn-secondary"
+                            @onclick="() => _showPass = !_showPass">
+                        @(_showPass ? "Hide" : "Show")
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="email-hint-row">
+            <span class="help-text">
+                Common settings:
+                Office 365 → <code>smtp.office365.com:587</code> &nbsp;|&nbsp;
+                Gmail → <code>smtp.gmail.com:587</code> &nbsp;|&nbsp;
+                Internal relay → your relay host, port <code>25</code>, no credentials
+            </span>
+        </div>
+    </div>
+
+    <div class="erp-actions" style="margin-bottom:2rem">
+        <button class="btn btn-primary" @onclick="SaveSettings" disabled="@_saving">
+            @(_saving ? "Saving..." : "Save Settings")
+        </button>
+    </div>
+
+    <div class="erp-form-card">
+        <h2 class="settings-section-title">Send Test Email</h2>
+        <small class="help-text" style="display:block;margin-bottom:1rem">
+            Tests the current form values — save first if you want to verify the saved configuration.
+        </small>
+
+        @if (!string.IsNullOrEmpty(_testSuccess))
+        {
+            <div class="alert alert-success">@_testSuccess</div>
+        }
+        @if (!string.IsNullOrEmpty(_testError))
+        {
+            <div class="alert alert-error">@_testError</div>
+        }
+
+        <div class="email-test-row">
+            <div class="form-group" style="flex:1;max-width:360px;margin:0">
+                <label>Send test to</label>
+                <input class="form-control" type="email"
+                       @bind="_testRecipient" placeholder="you@example.com" />
+            </div>
+            <button class="btn btn-secondary" style="align-self:flex-end"
+                    @onclick="SendTestEmail" disabled="@(_testing || _mode != "Smtp")">
+                @(_testing ? "Sending..." : "Send Test Email")
+            </button>
+            @if (_mode != "Smtp")
+            {
+                <small class="help-text" style="align-self:flex-end">Switch mode to SMTP to send a test.</small>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _mode = "LogOnly";
+    private string _from = "andon@example.com";
+    private string _host = "";
+    private int _port = 587;
+    private string _user = "";
+    private string _pass = "";
+    private bool _showPass;
+
+    private bool _saving;
+    private string? _saveSuccess;
+    private string? _saveError;
+
+    private string _testRecipient = "";
+    private bool _testing;
+    private string? _testSuccess;
+    private string? _testError;
+
+    protected override void OnInitialized()
+    {
+        _mode = Config["EMAIL_MODE"] ?? "LogOnly";
+        _from = Config["EMAIL_FROM"] ?? "andon@example.com";
+        _host = Config["SMTP_HOST"] ?? "";
+        _port = int.TryParse(Config["SMTP_PORT"], out var p) ? p : 587;
+        _user = Config["SMTP_USER"] ?? "";
+        _pass = Config["SMTP_PASS"] ?? "";
+    }
+
+    private async Task SaveSettings()
+    {
+        _saving = true;
+        _saveSuccess = null;
+        _saveError = null;
+        try
+        {
+            var payload = new Dictionary<string, object>
+            {
+                ["EMAIL_MODE"] = _mode,
+                ["EMAIL_FROM"] = _from.Trim(),
+                ["SMTP_HOST"]  = _host.Trim(),
+                ["SMTP_PORT"]  = _port.ToString(),
+                ["SMTP_USER"]  = _user.Trim(),
+                ["SMTP_PASS"]  = _pass
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(payload,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            var path = Path.Combine(Env.ContentRootPath, "email-settings.json");
+            await File.WriteAllTextAsync(path, json);
+            _saveSuccess = "Settings saved.";
+        }
+        catch (Exception ex)
+        {
+            _saveError = $"Failed to save: {ex.Message}";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task SendTestEmail()
+    {
+        _testing = true;
+        _testSuccess = null;
+        _testError = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_testRecipient))
+            {
+                _testError = "Please enter a recipient email address.";
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(_host))
+            {
+                _testError = "SMTP host is required.";
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(_from))
+            {
+                _testError = "From address is required.";
+                return;
+            }
+
+            var (success, message) = await EmailService.TestSmtpAsync(
+                _host.Trim(), _port,
+                string.IsNullOrWhiteSpace(_user) ? null : _user.Trim(),
+                string.IsNullOrWhiteSpace(_pass) ? null : _pass,
+                _from.Trim(), _testRecipient.Trim());
+
+            if (success) _testSuccess = message;
+            else _testError = message;
+        }
+        finally
+        {
+            _testing = false;
+        }
+    }
+}

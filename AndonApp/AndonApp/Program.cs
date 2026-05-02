@@ -9,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Optional ERP settings file — loaded after appsettings.json so it can override ErpSettings section.
 // The file is optional and reloads live when saved from the admin UI.
 builder.Configuration.AddJsonFile("erp-settings.json", optional: true, reloadOnChange: true);
+builder.Configuration.AddJsonFile("email-settings.json", optional: true, reloadOnChange: true);
 
 // ---- Database ----
 // Factory registered as singleton so Blazor Server circuits can create short-lived contexts per operation.

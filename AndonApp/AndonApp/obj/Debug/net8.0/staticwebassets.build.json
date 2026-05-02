@@ -1,6 +1,6 @@
 {
   "Version": 1,
-  "Hash": "YYlyWPdhJoG4hOGqkRdgDCNvQajNn2kliLstJW+H87g=",
+  "Hash": "bIT5U3gQfrHMJH3KTTskD2jKy5tFgfx8wA5ZPLoWP9w=",
   "Source": "AndonApp",
   "BasePath": "_content/AndonApp",
   "Mode": "Default",
@@ -34,6 +34,25 @@
       "CopyToOutputDirectory": "Never",
       "CopyToPublishDirectory": "PreserveNewest",
       "OriginalItemSpec": "wwwroot\\css\\app.css"
+    },
+    {
+      "Identity": "C:\\Users\\jonny\\OneDrive\\Desktop\\ANDON\\AndonApp\\AndonApp\\wwwroot\\js\\theme.js",
+      "SourceId": "AndonApp",
+      "SourceType": "Discovered",
+      "ContentRoot": "C:\\Users\\jonny\\OneDrive\\Desktop\\ANDON\\AndonApp\\AndonApp\\wwwroot\\",
+      "BasePath": "_content/AndonApp",
+      "RelativePath": "js/theme.js",
+      "AssetKind": "All",
+      "AssetMode": "All",
+      "AssetRole": "Primary",
+      "AssetMergeBehavior": "PreferTarget",
+      "AssetMergeSource": "",
+      "RelatedAsset": "",
+      "AssetTraitName": "",
+      "AssetTraitValue": "",
+      "CopyToOutputDirectory": "Never",
+      "CopyToPublishDirectory": "PreserveNewest",
+      "OriginalItemSpec": "wwwroot\\js\\theme.js"
     }
   ]
 }

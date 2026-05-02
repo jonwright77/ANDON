@@ -21,6 +21,11 @@
   --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
   --radius: 8px;
   --shadow: 0 2px 8px rgba(0,0,0,0.12);
+
+  /* Semantic tokens — used by admin/overview pages */
+  --surface: #ffffff;
+  --border:  #e5e7eb;
+  --text-secondary: #6b7280;
 }
 
 html, body { height: 100%; font-family: var(--font); color: var(--gray-900); background: var(--gray-50); }
@@ -1374,6 +1379,59 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
 }
 
 /* ============================================================
+   EMAIL SETTINGS PAGE
+   ============================================================ */
+
+.email-status-bar {
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+}
+
+.email-status-active  { background: #f1f8f1; border-color: #2e7d32; color: #1b5e20; }
+.email-status-logonly { background: #fef9ec; border-color: #b45309; color: #78350f; }
+
+.settings-section-title {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0 1.25rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-card-muted { opacity: 0.6; }
+
+.email-smtp-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 0;
+}
+
+.input-reveal {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.input-reveal .form-control { flex: 1; }
+
+.email-hint-row {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.email-test-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* ============================================================
    ERP SETTINGS PAGE
    ============================================================ */
 
@@ -1438,6 +1496,102 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
   margin-bottom: 1rem;
   font-size: 0.9rem;
 }
+
+/* ============================================================
+   DARK MODE
+   All rules scoped to .admin-shell — the production-line
+   status board (outside .admin-shell) is completely unaffected.
+   ============================================================ */
+
+/* Re-map the palette on the shell element so every descendant
+   using var(--gray-*) or the semantic tokens adapts automatically. */
+html.dark .admin-shell {
+  color-scheme: dark;
+  background: #0f172a;
+  color: #f1f5f9;
+
+  --gray-50:  #0f172a;
+  --gray-100: #1e293b;
+  --gray-200: #334155;
+  --gray-400: #64748b;
+  --gray-700: #cbd5e1;
+
+  --surface:        #1e293b;
+  --border:         #334155;
+  --text-secondary: #94a3b8;
+  --shadow:         0 2px 8px rgba(0,0,0,0.4);
+}
+
+/* Nav is a touch darker than the content area */
+html.dark .admin-nav {
+  background: #0d1117;
+}
+
+/* White-background elements that don't use a variable we override */
+html.dark .admin-shell .data-table,
+html.dark .admin-shell .modal,
+html.dark .admin-shell .schedule-card { background: var(--surface); }
+
+html.dark .admin-shell .data-table tr:hover td { background: #334155; }
+
+/* Form controls */
+html.dark .admin-shell .form-control {
+  background: var(--surface);
+  border-color: var(--border);
+  color: #f1f5f9;
+}
+html.dark .admin-shell .form-control:focus { border-color: #60a5fa; }
+
+/* Close button hover in modal */
+html.dark .admin-shell .modal-close:hover { color: #f1f5f9; }
+
+/* Badges */
+html.dark .admin-shell .badge-blue  { background: #1e3a5f; color: #93c5fd; }
+html.dark .admin-shell .badge-green { background: #14532d; color: #86efac; }
+
+/* Inline code (url-text, etc.) */
+html.dark .admin-shell code {
+  background: #0f172a;
+  color: #94a3b8;
+}
+
+/* Success alert */
+html.dark .admin-shell .alert-success {
+  background: #14532d;
+  color: #bbf7d0;
+  border-color: #166534;
+}
+
+/* ERP & Email settings status bars */
+html.dark .admin-shell .erp-status-ok,
+html.dark .admin-shell .email-status-active  { background: #14532d; border-color: #166534; color: #bbf7d0; }
+html.dark .admin-shell .erp-status-error     { background: #7f1d1d; border-color: #991b1b; color: #fecaca; }
+html.dark .admin-shell .email-status-logonly { background: #451a03; border-color: #78350f; color: #fde68a; }
+
+/* Links in the main content area (not nav, not buttons) */
+html.dark .admin-main a:not(.btn):not(.btn-link):not([class*="btn"]) { color: #60a5fa; }
+html.dark .admin-shell .back-link { color: #60a5fa; }
+
+/* Theme toggle button — always in the dark nav so colours stay constant */
+.theme-toggle {
+  background: none;
+  border: 1.5px solid rgba(255,255,255,0.3);
+  border-radius: 6px;
+  color: rgba(255,255,255,0.8);
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0.2rem 0.55rem;
+  line-height: 1.5;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.theme-toggle:hover {
+  background: rgba(255,255,255,0.1);
+  border-color: rgba(255,255,255,0.65);
+  color: #ffffff;
+}
+/* Icon is CSS-driven — always correct, no JS state needed */
+.theme-toggle::before         { content: '🌙'; }
+html.dark .theme-toggle::before { content: '☀'; }
 
 /* ============================================================
    RESPONSIVE

@@ -6,12 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ANDON System</title>
     <base href="/" />
-    <link rel="stylesheet" href="css/app.css?v=15" />
+    <script>
+        (function () {
+            if (localStorage.getItem('andon-theme') === 'dark')
+                document.documentElement.classList.add('dark');
+        })();
+    </script>
+    <link rel="stylesheet" href="css/app.css?v=17" />
     <HeadOutlet />
 </head>
 
 <body>
     <Routes />
+    <script src="js/theme.js"></script>
     <script src="_framework/blazor.server.js"></script>
 </body>
 
