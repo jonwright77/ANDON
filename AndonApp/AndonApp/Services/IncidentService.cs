@@ -52,6 +52,7 @@ public class IncidentService : IIncidentService
         var slug = incident.ProductionLine.Slug;
         await _hub.Clients.Group($"line:{slug}").SendAsync("IncidentCreated", new IncidentSummaryDto(
             incident.Id,
+            incident.ProductionLineId,
             incident.Severity,
             incident.AndonCode.Code,
             incident.AndonCode.Name,

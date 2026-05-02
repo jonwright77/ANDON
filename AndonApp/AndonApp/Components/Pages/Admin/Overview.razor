@@ -1,0 +1,402 @@
+@page "/admin/overview"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
+@layout AndonApp.Components.Layout.AdminLayout
+@using AndonApp.Data
+@using AndonApp.Data.Models
+@using AndonApp.Services
+@using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.Extensions.Options
+@inject IDbContextFactory<AndonDbContext> DbFactory
+@inject NavigationManager Nav
+@inject ErpPollStatus ErpPollStatus
+@inject IOptionsMonitor<ErpSettings> ErpOptions
+@implements IAsyncDisposable
+@rendermode InteractiveServer
+
+<PageTitle>Production Overview</PageTitle>
+
+<div class="overview-page">
+
+    <div class="overview-header">
+        <h1>Production Overview</h1>
+
+        @if (_allTypes.Any() || _hasUntypedLines)
+        {
+            <div class="overview-filter">
+                <span class="overview-filter-label">Show:</span>
+                @foreach (var type in _allTypes)
+                {
+                    var isChecked = _selectedTypeIds.Contains(type.Id);
+                    <label class="overview-filter-chip @(isChecked ? "active" : "")">
+                        <input type="checkbox"
+                               checked="@isChecked"
+                               @onchange="e => ToggleType(type.Id, (bool)e.Value!)" />
+                        @type.Name
+                    </label>
+                }
+                @if (_hasUntypedLines)
+                {
+                    <label class="overview-filter-chip @(_showUntyped ? "active" : "")">
+                        <input type="checkbox"
+                               checked="@_showUntyped"
+                               @onchange="e => _showUntyped = (bool)e.Value!" />
+                        Untyped
+                    </label>
+                }
+                <button class="btn btn-sm btn-secondary" @onclick="SelectAll">All</button>
+                <button class="btn btn-sm btn-secondary" @onclick="ClearAll">None</button>
+            </div>
+        }
+
+        <div class="overview-clock">@_now.ToString("HH:mm:ss")</div>
+    </div>
+
+    @if (_loading)
+    {
+        <p style="padding:2rem">Loading...</p>
+    }
+    else if (!VisibleCards.Any())
+    {
+        <div class="overview-empty-page">No production lines match the current filter.</div>
+    }
+    else
+    {
+        @foreach (var group in GroupedCards)
+        {
+            <div class="overview-section">
+                <div class="overview-section-header">@(group.Key ?? "Untyped")</div>
+                <div class="overview-grid">
+                    @foreach (var card in group)
+                    {
+                        var expected = GetExpected(card);
+                        var builtStale = IsBuiltStale(card);
+                        <div class="overview-card @GetCardClass(card)">
+                            <div class="overview-card-header">
+                                <div class="overview-card-name">@card.Name</div>
+                            </div>
+                            <div class="overview-card-stats">
+                                <div class="overview-stat">
+                                    <div class="overview-stat-label">Expected</div>
+                                    <div class="overview-stat-value">
+                                        @(expected.HasValue ? expected.Value.ToString("N0") : "–")
+                                    </div>
+                                </div>
+                                <div class="overview-stat">
+                                    <div class="overview-stat-label">Built</div>
+                                    <div class="overview-stat-value @(builtStale ? "overview-stat-stale" : "")">
+                                        @(card.BuiltQuantity.HasValue ? card.BuiltQuantity.Value.ToString("N0") : "–")
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private List<LineCard> _allCards = new();
+    private List<LineType> _allTypes = new();
+    private HashSet<int> _selectedTypeIds = new();
+    private bool _showUntyped = true;
+    private bool _hasUntypedLines;
+    private bool _loading = true;
+
+    private DateTime _now = DateTime.Now;
+    private DayOfWeek _loadedDay;
+    private Timer? _clockTimer;
+    private HubConnection? _hubConnection;
+
+    private IEnumerable<LineCard> VisibleCards => _allCards.Where(c =>
+        c.LineTypeId == null ? _showUntyped : _selectedTypeIds.Contains(c.LineTypeId.Value));
+
+    // Groups visible cards alphabetically by type name; untyped lines go last.
+    private IEnumerable<IGrouping<string?, LineCard>> GroupedCards =>
+        VisibleCards
+            .OrderBy(c => c.Name)
+            .GroupBy(c => c.LineTypeName)
+            .OrderBy(g => g.Key == null ? "￿" : g.Key);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllAsync();
+        await ConnectSignalRAsync();
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            _clockTimer = new Timer(OnClockTick, null, TimeSpan.Zero, TimeSpan.FromSeconds(1));
+        return Task.CompletedTask;
+    }
+
+    private void OnClockTick(object? _)
+    {
+        _ = InvokeAsync(async () =>
+        {
+            _now = DateTime.Now;
+            if (DateTime.Today.DayOfWeek != _loadedDay)
+                await ReloadSchedulesAndTargetsAsync();
+            StateHasChanged();
+        });
+    }
+
+    private async Task LoadAllAsync()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        _loadedDay = DateTime.Today.DayOfWeek;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var lines = await db.ProductionLines
+            .Include(l => l.LineType)
+            .Where(l => l.IsActive)
+            .OrderBy(l => l.Name)
+            .ToListAsync();
+
+        var lineIds = lines.Select(l => l.Id).ToList();
+
+        var schedules = await db.LineSchedules
+            .Include(s => s.Breaks)
+            .Where(s => lineIds.Contains(s.ProductionLineId) && s.DayOfWeek == _loadedDay)
+            .ToListAsync();
+        var scheduleByLine = schedules.ToDictionary(s => s.ProductionLineId);
+
+        var targets = await db.LineTargets
+            .Where(t => lineIds.Contains(t.ProductionLineId) && t.Date == today)
+            .ToDictionaryAsync(t => t.ProductionLineId, t => t.Target);
+
+        var openIncidents = await db.Incidents
+            .Where(i => lineIds.Contains(i.ProductionLineId) && i.Status == IncidentStatus.OPEN)
+            .Select(i => new { i.Id, i.ProductionLineId, i.Severity })
+            .ToListAsync();
+        var incidentsByLine = openIncidents
+            .GroupBy(i => i.ProductionLineId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var erpSnap = ErpPollStatus.GetSnapshot();
+
+        _allCards = lines.Select(line =>
+        {
+            var card = new LineCard
+            {
+                Id = line.Id,
+                Name = line.Name,
+                Slug = line.Slug,
+                AccessToken = line.AccessToken,
+                Pool = line.Pool,
+                LineTypeId = line.LineTypeId,
+                LineTypeName = line.LineType?.Name,
+                TodaySchedule = scheduleByLine.GetValueOrDefault(line.Id),
+                AdminTarget = targets.TryGetValue(line.Id, out var t) ? t : null
+            };
+
+            if (!string.IsNullOrEmpty(line.Pool) && erpSnap.results.TryGetValue(line.Pool, out var qty))
+            {
+                card.BuiltQuantity = qty;
+                card.BuiltLastUpdated = erpSnap.at;
+            }
+
+            if (incidentsByLine.TryGetValue(line.Id, out var incidents))
+            {
+                foreach (var i in incidents)
+                {
+                    card.OpenIncidentIds.Add(i.Id);
+                    if (i.Severity == Severity.RED) card.RedIncidentIds.Add(i.Id);
+                    else card.AmberIncidentIds.Add(i.Id);
+                }
+            }
+
+            return card;
+        }).ToList();
+
+        _allTypes = await db.LineTypes.OrderBy(t => t.Name).ToListAsync();
+        _selectedTypeIds = _allTypes.Select(t => t.Id).ToHashSet();
+        _hasUntypedLines = _allCards.Any(c => c.LineTypeId == null);
+        _showUntyped = true;
+        _loading = false;
+    }
+
+    private async Task ReloadSchedulesAndTargetsAsync()
+    {
+        _loadedDay = DateTime.Today.DayOfWeek;
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        var lineIds = _allCards.Select(c => c.Id).ToList();
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var schedules = await db.LineSchedules
+            .Include(s => s.Breaks)
+            .Where(s => lineIds.Contains(s.ProductionLineId) && s.DayOfWeek == _loadedDay)
+            .ToListAsync();
+        var scheduleByLine = schedules.ToDictionary(s => s.ProductionLineId);
+
+        var targets = await db.LineTargets
+            .Where(t => lineIds.Contains(t.ProductionLineId) && t.Date == today)
+            .ToDictionaryAsync(t => t.ProductionLineId, t => t.Target);
+
+        foreach (var card in _allCards)
+        {
+            card.TodaySchedule = scheduleByLine.GetValueOrDefault(card.Id);
+            card.AdminTarget = targets.TryGetValue(card.Id, out var t) ? t : null;
+        }
+    }
+
+    private async Task ConnectSignalRAsync()
+    {
+        if (!_allCards.Any()) return;
+
+        var hubUrl = Nav.ToAbsoluteUri("/hubs/andon");
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(hubUrl)
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hubConnection.On<string, int>("BuiltUpdated", (slug, qty) =>
+        {
+            _ = InvokeAsync(() =>
+            {
+                var card = _allCards.FirstOrDefault(c => c.Slug == slug);
+                if (card != null)
+                {
+                    card.BuiltQuantity = qty;
+                    card.BuiltLastUpdated = DateTime.UtcNow;
+                }
+                StateHasChanged();
+            });
+        });
+
+        _hubConnection.On<IncidentSummaryDto>("IncidentCreated", dto =>
+        {
+            _ = InvokeAsync(() =>
+            {
+                var card = _allCards.FirstOrDefault(c => c.Id == dto.ProductionLineId);
+                if (card != null)
+                {
+                    card.OpenIncidentIds.Add(dto.Id);
+                    if (dto.Severity == Severity.RED) card.RedIncidentIds.Add(dto.Id);
+                    else card.AmberIncidentIds.Add(dto.Id);
+                }
+                StateHasChanged();
+            });
+        });
+
+        _hubConnection.On<int>("IncidentClosed", id =>
+        {
+            _ = InvokeAsync(() =>
+            {
+                foreach (var card in _allCards)
+                {
+                    card.OpenIncidentIds.Remove(id);
+                    card.RedIncidentIds.Remove(id);
+                    card.AmberIncidentIds.Remove(id);
+                }
+                StateHasChanged();
+            });
+        });
+
+        await _hubConnection.StartAsync();
+
+        foreach (var card in _allCards)
+            await _hubConnection.InvokeAsync("JoinLine", card.Slug, card.AccessToken);
+    }
+
+    // ---- Filter helpers ----
+
+    private void ToggleType(int typeId, bool selected)
+    {
+        if (selected) _selectedTypeIds.Add(typeId);
+        else _selectedTypeIds.Remove(typeId);
+    }
+
+    private void SelectAll()
+    {
+        _selectedTypeIds = _allTypes.Select(t => t.Id).ToHashSet();
+        _showUntyped = true;
+    }
+
+    private void ClearAll()
+    {
+        _selectedTypeIds.Clear();
+        _showUntyped = false;
+    }
+
+    // ---- Card helpers ----
+
+    private string GetCardClass(LineCard card)
+    {
+        if (card.RedIncidentIds.Count > 0) return "overview-card-red";
+        if (card.AmberIncidentIds.Count > 0) return "overview-card-amber";
+        return "overview-card-green";
+    }
+
+    private bool IsBuiltStale(LineCard card)
+    {
+        if (!card.BuiltQuantity.HasValue || !card.BuiltLastUpdated.HasValue) return false;
+        var threshold = Math.Max(20, ErpOptions.CurrentValue.RefreshIntervalSeconds * 2);
+        return (DateTime.UtcNow - card.BuiltLastUpdated.Value).TotalSeconds > threshold;
+    }
+
+    private int? GetExpected(LineCard card)
+    {
+        var scheduled = GetTotalWorkingMinutes(card);
+        var elapsed = GetElapsedMinutes(card);
+        if (scheduled is null or 0 || elapsed is null || !card.AdminTarget.HasValue) return null;
+        return (int)Math.Round((double)elapsed.Value / scheduled.Value * card.AdminTarget.Value);
+    }
+
+    private int? GetTotalWorkingMinutes(LineCard card)
+    {
+        if (card.TodaySchedule == null || !card.TodaySchedule.IsWorkday) return null;
+        var total = (card.TodaySchedule.EndTime - card.TodaySchedule.StartTime).TotalMinutes;
+        var breaks = card.TodaySchedule.Breaks.Sum(b => (b.EndTime - b.StartTime).TotalMinutes);
+        return (int)(total - breaks);
+    }
+
+    private int? GetElapsedMinutes(LineCard card)
+    {
+        if (card.TodaySchedule == null || !card.TodaySchedule.IsWorkday) return null;
+        var t = _now.TimeOfDay;
+        if (t < card.TodaySchedule.StartTime) return 0;
+
+        var elapsed = (t - card.TodaySchedule.StartTime).TotalMinutes;
+        foreach (var brk in card.TodaySchedule.Breaks)
+        {
+            if (t >= brk.EndTime)
+                elapsed -= (brk.EndTime - brk.StartTime).TotalMinutes;
+            else if (t > brk.StartTime)
+                elapsed -= (t - brk.StartTime).TotalMinutes;
+        }
+
+        var totalWorking = (card.TodaySchedule.EndTime - card.TodaySchedule.StartTime).TotalMinutes
+                           - card.TodaySchedule.Breaks.Sum(b => (b.EndTime - b.StartTime).TotalMinutes);
+        return (int)Math.Min(Math.Max(elapsed, 0), totalWorking);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _clockTimer?.Dispose();
+        if (_hubConnection is not null)
+            await _hubConnection.DisposeAsync();
+    }
+
+    private class LineCard
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = "";
+        public string Slug { get; set; } = "";
+        public string AccessToken { get; set; } = "";
+        public string? Pool { get; set; }
+        public int? LineTypeId { get; set; }
+        public string? LineTypeName { get; set; }
+        public LineSchedule? TodaySchedule { get; set; }
+        public int? AdminTarget { get; set; }
+        public int? BuiltQuantity { get; set; }
+        public DateTime? BuiltLastUpdated { get; set; }
+        public HashSet<int> OpenIncidentIds { get; set; } = new();
+        public HashSet<int> RedIncidentIds { get; set; } = new();
+        public HashSet<int> AmberIncidentIds { get; set; } = new();
+    }
+}

@@ -88,7 +88,7 @@ public class ErpPollingService : BackgroundService
             {
                 await _hubContext.Clients
                     .Group($"line:{line.Slug}")
-                    .SendAsync("BuiltUpdated", qty, ct);
+                    .SendAsync("BuiltUpdated", line.Slug, qty, ct);
             }
         }
     }

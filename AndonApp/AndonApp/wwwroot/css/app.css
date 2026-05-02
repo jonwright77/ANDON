@@ -1199,6 +1199,181 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
 .badge-amber { background: var(--bg-amber); color: var(--white); }
 
 /* ============================================================
+   PRODUCTION OVERVIEW
+   ============================================================ */
+
+.overview-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.overview-header {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+  padding: 1rem 1.5rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.overview-header h1 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.overview-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.overview-filter-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.overview-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 0.2rem 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  background: var(--surface);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.1s, border-color 0.1s;
+}
+
+.overview-filter-chip input[type="checkbox"] { cursor: pointer; }
+
+.overview-filter-chip.active {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  color: #1e40af;
+}
+
+.overview-clock {
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.overview-empty-page {
+  padding: 4rem 1.5rem;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.overview-section {
+  padding: 1.25rem 1.5rem 0;
+}
+
+.overview-section-header {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding-bottom: 0.75rem;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 1rem;
+}
+
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.25rem;
+  align-content: start;
+  padding-bottom: 1.5rem;
+}
+
+.overview-card {
+  border-radius: var(--radius);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  border: 3px solid rgba(255,255,255,0.4);
+  color: var(--white);
+}
+
+.overview-card-green { background: rgba(10, 130, 45, 0.85); }
+.overview-card-amber { background: rgba(120, 60, 0, 0.8); }
+.overview-card-red   { background: rgba(180, 0, 30, 0.85); }
+
+.overview-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding-bottom: 1.1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.25);
+  margin-bottom: 1.1rem;
+}
+
+.overview-card-name {
+  font-size: 1.45rem;
+  font-weight: 800;
+  color: var(--white);
+  line-height: 1.15;
+}
+
+.overview-card-type {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.65);
+}
+
+.overview-card-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.overview-stat-label {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.7);
+  margin-bottom: 0.3rem;
+}
+
+.overview-stat-value {
+  font-size: 2.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--white);
+  line-height: 1;
+}
+
+.overview-stat-stale { opacity: 0.5; }
+
+.overview-empty {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 4rem 0;
+  font-size: 1rem;
+}
+
+/* ============================================================
    ERP SETTINGS PAGE
    ============================================================ */
 
