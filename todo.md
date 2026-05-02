@@ -1,75 +1,151 @@
-# AndonApp – Review TODO
+# AndonApp – Project State
 
-## High Priority
+## Overview
 
-- [x] **1. Scoped DbContext in Blazor Server circuits**
-  Replaced `AddDbContext` with `AddDbContextFactory` in `Program.cs`. All five Blazor components (`AndonCodes.razor`, `Lines.razor`, `AndonCodeRecipients.razor`, `LineSchedules.razor`, `LineStatus.razor`) updated to inject `IDbContextFactory<AndonDbContext>` and create a short-lived `await using var db` per method instead of holding a single circuit-lifetime context.
+**Stack:** ASP.NET Core 8, Blazor Server (InteractiveServer), SQL Server / LocalDB, Entity Framework Core 8, SignalR, MailKit.
 
-- [x] **2. Silent failure on CloseIncident**
-  Added `_closingId`, `_closeError`, and `_closeErrorId` fields. `CloseIncident()` now disables the button while in-flight and displays an inline error message on the specific incident card if the call fails.
+**CSS cache busting:** `App.razor` links `css/app.css?v=17` — increment `v` whenever `app.css` changes.
 
-- [x] **3. SignalR hub has no access control**
-  `AndonHub` now injects `IDbContextFactory<AndonDbContext>`. `JoinLine` requires a `token` parameter and validates slug + token + IsActive against the DB before adding the connection to the group. Invalid requests throw `HubException`. `LineStatus.razor` updated to pass `Token` when invoking `JoinLine`.
+---
 
-- [x] **4. Weak email validation**
-  Replaced `email.Contains('@')` with a `System.Net.Mail.MailAddress` constructor parse in `AndonCodeRecipients.razor`. Invalid addresses throw a `FormatException` which is caught to show the validation error.
+## Admin Routes
 
-## Medium Priority
+| Route | Purpose |
+|---|---|
+| `/admin/login` | Admin sign-in (cookie auth, BCrypt) |
+| `/admin/logout` | Admin sign-out |
+| `/admin/overview` | Production overview board — card per line, grouped by type |
+| `/admin/andon-codes` | Manage ANDON codes and email recipients |
+| `/admin/andon-codes/{id}/recipients` | Email recipients for a code |
+| `/admin/lines` | Manage production lines |
+| `/admin/lines/{id}/schedule` | Per-line shift schedule and breaks |
+| `/admin/lines/{id}/targets` | Per-line monthly target calendar |
+| `/admin/lines/{id}/review` | Day-by-day incident timeline and list |
+| `/admin/line-types` | Manage production line types |
+| `/admin/todays-targets` | All lines: today's working hours, targets, and variance |
+| `/admin/email-settings` | SMTP configuration + send test email |
+| `/admin/erp-settings` | ERP database integration settings + connection test |
 
-- [x] **5. Duplicate data access paths (Admin UI vs Admin API)**
-  Deleted `AdminApiController.cs` and its DTOs (`AndonCodeDto`, `RecipientDto`, `ProductionLineDto`). The Blazor admin pages are the authoritative data path; the API was unused dead code with no remaining references.
+**End-user:** `/line/{slug}?token={token}` — production line status board
 
-- [x] **6. SignalR broadcasts only incident ID, causing an extra DB round-trip**
-  Created `IncidentSummaryDto` record in `Services/`. `IncidentService` now broadcasts the full DTO on `IncidentCreated`. `LineStatus.razor` updated to hold `List<IncidentSummaryDto>`, with the `IncidentCreated` handler adding directly to the list (sorted by `CreatedAt`) and `IncidentClosed` removing by ID — no DB round-trip on either event. `LoadIncidentsAsync` uses an EF Core `.Select()` projection instead of `Include`.
+---
 
-- [x] **7. `LineSchedule.razor` is a dead stub**
-  File deleted. `LineSchedules.razor` at the same route (`/admin/lines/{Id:int}/schedule`) is the live implementation.
+## Database
 
-## New Functionality
+**Tables:** `AdminUsers`, `AndonCodes`, `AndonCodeRecipients`, `ProductionLines`, `LineTypes`, `Incidents`, `LineSchedules`, `ScheduleBreaks`, `LineTargets`, `LineOperatorTargets`
 
-- [x] **A. Working minutes display in title bar**
-  Added `GetTotalWorkingMinutes()` — returns null if no workday schedule, otherwise `(EndTime - StartTime)` minus sum of all break durations. Added `FormatMinutes()` to render as `8h 30m` / `45m`. Displayed in the top bar as a "Scheduled" tile; hidden when no schedule is set. Updates automatically each clock tick via `_todaySchedule`.
+**Migrations (in order):**
+`InitialCreate` → `AddWorkSchedules` → `AddLineTargets` → `AddLineOperatorTargets` → `AddProductionLinePool` → `AddLineTypes`
 
-- [x] **B. Elapsed working minutes display in title bar**
-  Added `GetElapsedMinutes()` — `(Now - StartTime)` in minutes, clamped to 0 before shift start and to total shift duration after shift end, no break deduction. Displayed as "ELAPSED" in the second stat card, formatted via the shared `FormatMinutes()` helper. Updates every clock tick.
+---
 
-- [x] **C. Target Calendar per Production Line**
-  Allow admins to set a daily build target for each production line, stored in the database and viewed as a month-at-a-time calendar.
+## Configuration
 
-  **New model:** `LineTarget` — `Id`, `ProductionLineId` (FK), `Date` (date only, no time), `Target` (int). Unique index on `(ProductionLineId, Date)`.
+### Database connection string
+Set in `appsettings.json` (or override via environment variable `ConnectionStrings__DefaultConnection`):
+```json
+"ConnectionStrings": {
+  "DefaultConnection": "Server=(localdb)\\MSSQLLocalDB;Database=AndonDb;Trusted_Connection=True;MultipleActiveResultSets=true"
+}
+```
 
-  **New migration:** add `LineTargets` table.
+### Email settings
+Managed via **Admin → Email Settings** (`/admin/email-settings`).
+Saved to `email-settings.json` (hot-reloads, no restart needed).
+Defaults to `LogOnly` mode — switch to `Smtp` to send real emails.
+Fields: Mode, From Address, SMTP Host, Port, Username, Password. Includes a **Send Test Email** function.
 
-  **Admin UI:** new page at `/admin/lines/{Id}/targets` linked from the Lines table (alongside the existing Schedule button). Displays a month calendar grid — each day cell shows the current target (if set) and is clickable to set or edit the value inline. Month navigation (previous/next) to move between months.
+### ERP integration settings
+Managed via **Admin → ERP Settings** (`/admin/erp-settings`).
+Saved to `erp-settings.json` (hot-reloads, no restart needed).
+Disabled by default (`Enabled: false`) — app runs normally without it.
+Fields: Enabled toggle, Connection String, SQL Query, Pool Column, Quantity Column, Refresh Interval. Includes a **Test Connection** function that previews query results.
 
-  **Line status board:** show today's target value in the top bar alongside the clock and work status, fetched from `LineTargets` for the current line and today's date. If no target is set for today, display nothing.
+---
 
-  **Data notes:** `Date` should be stored as `DateOnly` (EF Core 6+ supports this natively for SQL Server `date` columns). Targets are optional per day — days with no row have no target.
+## Completed Features
 
-- [x] **D. Expected build count card**
-  Show an "EXPECTED" value in the fourth stat card. Calculated as `(Elapsed ÷ Scheduled) × Target`, giving the number of units that should have been built by this point in the day based on linear progress through the shift. Requires all three of Elapsed, Scheduled, and Target to be available — display `–` if any are missing or Scheduled is zero. Round to the nearest whole number. Updates every clock tick alongside Elapsed.
+### Code quality
+- [x] `AddDbContextFactory` — short-lived `await using var db` per method, no circuit-lifetime context leak
+- [x] SignalR hub validates slug + token + IsActive before joining groups
+- [x] `CloseIncident()` disables button in-flight, shows per-card inline error on failure
+- [x] Email address validation uses `MailAddress.Parse` (not `Contains('@')`)
+- [x] Admin API controller removed — Blazor pages are the sole admin data path
+- [x] SignalR broadcasts full `IncidentSummaryDto` (including `ProductionLineId`) on create — no DB round-trip on SignalR events
 
-- [x] **E. Line Target button on production line status board**
-  Add a "Line Target" button to the bottom-left of the `LineStatus.razor` screen, mirroring the position of the existing "+ New Incident" button on the bottom-right. Clicking it opens a modal allowing the end user to enter a target value for the current day. The value is saved to the existing `LineTargets` table (same model used by the admin Target Calendar), so it appears in both places.
+### Production line status board (`/line/{slug}`)
+- [x] **SCHEDULED** card — total working minutes (shift minus breaks), shift times sub-line
+- [x] **ELAPSED** card — working minutes elapsed, clamped to shift bounds, deducts completed/in-progress breaks
+- [x] **TARGET** card — admin-set daily target (from Target Calendar); operator line target shown as sub-line
+- [x] **EXPECTED** card — `round((Elapsed ÷ Scheduled) × Target)`; shows both admin and operator expected values
+- [x] **BUILT** card — live ERP quantity via SignalR; fades when data is stale (> 2× refresh interval); seeds from last poll on page load
+- [x] Work status badge — Working / Break name / Overtime, updates every second
+- [x] Dual target system — Admin Target (calendar) vs Operator Line Target (button on status board)
+- [x] All cards colour-coded by worst open incident severity (green / amber / red)
 
-  **Behaviour:**
-  - If a target already exists for today, the modal pre-populates with the current value so it can be updated or cleared.
-  - On save, `_todayTarget` is updated immediately so the TARGET and EXPECTED cards refresh without a page reload.
-  - No admin login required — the line access token is sufficient authorisation.
-  - The admin Target Calendar should display any target set via this button unchanged — no schema or calendar UI changes needed.
+### Admin — Production Lines (`/admin/lines`)
+- [x] Create / edit / delete production lines
+- [x] **Line Type** — optional type assignment, shown as blue badge in table
+- [x] **Pool** — optional ERP pool identifier for BUILT card mapping
+- [x] Auto-generated access token; end-user URL shown in table
 
-## Deferred
+### Admin — Line Types (`/admin/line-types`)
+- [x] Create / edit / delete line types (Name, Description)
+- [x] Shows count of lines using each type; deletion clears the type from affected lines (SET NULL)
 
-- [ ] **9. No brute-force protection on admin login**
-  `AdminLogin.cshtml.cs` has no rate limiting or lockout on failed attempts. Consider ASP.NET Core's built-in IP rate limiting middleware for production.
+### Admin — Schedule (`/admin/lines/{id}/schedule`)
+- [x] Per-line, per-day shift schedule (start/end time, workday toggle)
+- [x] Named break periods per day
 
-- [ ] **10. `MigrateAsync()` runs on every startup**
-  `DbSeeder.SeedAsync` calls `db.Database.MigrateAsync()` unconditionally. Fine for development; consider moving it to a separate startup step or CLI command for production deployments.
+### Admin — Targets (`/admin/lines/{id}/targets`)
+- [x] Monthly calendar grid — click any day to set/edit/clear admin target
+- [x] Shows both admin target (editable) and operator target (read-only `Line: X` label) per cell
 
-- [ ] **11. `AndonCode` model likely missing `CreatedAt` default**
-  The migration creates a non-nullable `CreatedAt datetime2` column on `AndonCodes`, but `DbSeeder` does not set it and the model may not have a default. Verify `AndonCode.cs` has `public DateTime CreatedAt { get; set; } = DateTime.UtcNow;` to avoid inserting `0001-01-01`.
+### Admin — Line Review (`/admin/lines/{id}/review`)
+- [x] Date picker (capped at today); defaults to today
+- [x] Schedule summary bar (shift times + named breaks)
+- [x] SVG timeline chart — incident bands (AMBER/RED), break overlays, now-line, hourly ticks
+- [x] Incident list table — severity, code, opened/closed times, duration, status, additional info
 
-- [ ] **8. Access token exposed in URL query string**
-  `/line/{slug}?token={AccessToken}` appears in server access logs, browser history, and HTTP Referer headers. The spec defines this URL format so the link generation can't change, but exposure can be reduced after the initial load.
-  **Proposed approach:** use JS `history.replaceState()` via interop after the token is validated to strip it from the browser URL bar. This prevents the token appearing in browser history and Referer headers on subsequent navigation. Server access logs will still record it on the first request — that is unavoidable without a server-side token-exchange flow.
-  **To implement:** inject `IJSRuntime` into `LineStatus.razor`, and in `OnAfterRenderAsync` (first render, authorized) call `JS.InvokeVoidAsync("history.replaceState", null, "", $"/line/{Slug}")`. The `Token` value is already held in component memory so all subsequent operations continue to work.
+### Admin — Today's Targets (`/admin/todays-targets`)
+- [x] All active lines: working hours, breaks, scheduled minutes, admin target, operator target, variance (colour-coded)
+
+### Admin — Production Overview (`/admin/overview`)
+- [x] Card grid, one card per active production line, grouped by Line Type with section headers
+- [x] Multi-select type filter (checkbox chips) — filters by type in real-time; untyped lines shown separately
+- [x] Each card shows: line name, **Expected** (live clock-driven), **Built** (live ERP via SignalR)
+- [x] Card colour: green / amber / red based on open incidents — updates in real-time via SignalR
+
+### Admin — Email Settings (`/admin/email-settings`)
+- [x] Mode selector: Log Only / SMTP
+- [x] SMTP fields: Host, Port, Username, Password (show/hide toggle), From Address
+- [x] Saves to `email-settings.json` — hot-reloads without restart
+- [x] **Send Test Email** button — tests current form values against live SMTP before saving
+
+### Admin — ERP Settings (`/admin/erp-settings`)
+- [x] Enable/disable ERP polling
+- [x] Connection string, SQL query (textarea), Pool column, Quantity column, refresh interval
+- [x] Saves to `erp-settings.json` — hot-reloads without restart
+- [x] **Test Connection** button — runs query, previews first 5 rows in table
+- [x] Last poll status bar: timestamp, row count or error message
+
+### ERP integration (BUILT card feed)
+- [x] `ErpDataService` — raw `Microsoft.Data.SqlClient` (supports SQL Server 2008 R2+), no EF Core
+- [x] `ErpPollStatus` — thread-safe singleton holding last result, timestamp, error
+- [x] `ErpPollingService` — `BackgroundService`, polls on configured interval, sleeps 30 s when disabled, never crashes
+- [x] SignalR `BuiltUpdated(slug, qty)` broadcast to each matching line group on every successful poll
+- [x] Staleness indicator — BUILT card fades if last update is older than 2× refresh interval
+
+### UI
+- [x] Dark mode toggle in admin nav bar — persists to `localStorage`, applies instantly via CSS `html.dark` class
+- [x] No flash on load — inline `<head>` script applies saved theme before CSS renders
+- [x] Dark mode scoped to `.admin-shell` — production line status board unaffected
+
+---
+
+## Deferred / Known Issues
+
+- [ ] **Access token in URL** — token is visible in the browser URL bar and server logs. Fix: call `history.replaceState(null, "", "/line/{slug}")` in `LineStatus.razor` `OnAfterRenderAsync` (first render, authorised) to strip it without breaking the session.
+- [ ] **No brute-force protection on admin login** — no rate limiting or lockout on `AdminLogin.cshtml.cs`. Consider ASP.NET Core IP rate limiting middleware for production.
+- [ ] **`MigrateAsync()` on every startup** — `DbSeeder.SeedAsync` always calls `MigrateAsync()`. Acceptable for development; should be a separate deployment step in production.
+- [ ] **`AndonCode.CreatedAt` default** — migration creates a non-nullable `datetime2` column; verify `AndonCode.cs` has `public DateTime CreatedAt { get; set; } = DateTime.UtcNow;` so the seeder doesn't fail.
