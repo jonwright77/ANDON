@@ -1,0 +1,247 @@
+@page "/admin/erp-settings"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
+@layout AndonApp.Components.Layout.AdminLayout
+@using AndonApp.Services
+@using Microsoft.Extensions.Options
+@inject IOptionsMonitor<ErpSettings> ErpOptions
+@inject ErpPollStatus ErpPollStatus
+@inject IErpDataService ErpDataService
+@inject IWebHostEnvironment Env
+@rendermode InteractiveServer
+
+<PageTitle>ERP Settings – Admin</PageTitle>
+
+<div class="admin-page">
+    <div class="page-header">
+        <h1>ERP Integration Settings</h1>
+    </div>
+
+    @{
+        var snap = ErpPollStatus.GetSnapshot();
+    }
+    <div class="erp-status-bar @(snap.at == null ? "" : snap.succeeded ? "erp-status-ok" : "erp-status-error")">
+        @if (snap.at == null)
+        {
+            <span>No poll has run yet this session.</span>
+        }
+        else
+        {
+            <span>
+                Last run: <strong>@snap.at.Value.ToLocalTime().ToString("HH:mm:ss dd-MMM-yyyy")</strong>
+                &nbsp;—&nbsp;
+                @if (snap.succeeded)
+                {
+                    <span class="erp-status-ok-text">&#10003; Success — @snap.rowCount pool(s) returned</span>
+                }
+                else
+                {
+                    <span class="erp-status-error-text">&#10007; Failed: @snap.error</span>
+                }
+            </span>
+        }
+    </div>
+
+    <div class="erp-form-card">
+        @if (!string.IsNullOrEmpty(_saveSuccess))
+        {
+            <div class="alert alert-success">@_saveSuccess</div>
+        }
+        @if (!string.IsNullOrEmpty(_saveError))
+        {
+            <div class="alert alert-error">@_saveError</div>
+        }
+
+        <div class="form-group form-check">
+            <input type="checkbox" id="erpEnabled" @bind="_enabled" />
+            <label for="erpEnabled"><strong>Enable ERP polling</strong></label>
+        </div>
+
+        <div class="form-group">
+            <label>Connection String</label>
+            <input class="form-control form-control-mono"
+                   type="text"
+                   @bind="_connectionString"
+                   placeholder="Server=ERPSERVER;Database=AX_DB;User Id=readonly_user;Password=xxx;TrustServerCertificate=True;Encrypt=False;" />
+            <small class="help-text">SQL Server 2008 R2+ — use <code>TrustServerCertificate=True;Encrypt=False;</code> for legacy servers.</small>
+        </div>
+
+        <div class="form-group">
+            <label>SQL Query</label>
+            <textarea class="form-control form-control-mono"
+                      rows="6"
+                      @bind="_query"
+                      placeholder="SELECT Pool, Quantity FROM dbo.ProductionOutput WHERE Date = CAST(GETDATE() AS DATE)"></textarea>
+            <small class="help-text">Must return at least two columns: the pool identifier and the quantity. Use SELECT-only; write operations are not permitted.</small>
+        </div>
+
+        <div class="erp-columns-row">
+            <div class="form-group">
+                <label>Pool Column Name</label>
+                <input class="form-control" @bind="_poolColumn" placeholder="Pool" maxlength="100" />
+            </div>
+            <div class="form-group">
+                <label>Quantity Column Name</label>
+                <input class="form-control" @bind="_quantityColumn" placeholder="Quantity" maxlength="100" />
+            </div>
+            <div class="form-group">
+                <label>Refresh Interval (seconds)</label>
+                <input class="form-control" type="number" min="10" max="3600" @bind="_refreshInterval" />
+                <small class="help-text">Minimum 10 s. Default 60 s.</small>
+            </div>
+        </div>
+
+        <div class="erp-actions">
+            <button class="btn btn-secondary" @onclick="TestConnection" disabled="@(_testing || _saving)">
+                @(_testing ? "Testing..." : "Test Connection")
+            </button>
+            <button class="btn btn-primary" @onclick="SaveSettings" disabled="@(_saving || _testing)">
+                @(_saving ? "Saving..." : "Save Settings")
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_testError))
+    {
+        <div class="alert alert-error erp-test-result">@_testError</div>
+    }
+
+    @if (_testRows != null)
+    {
+        <div class="erp-test-result">
+            <h3>Test Result — first @_testRows.Count row(s)</h3>
+            @if (_testRows.Count == 0)
+            {
+                <p>Query returned no rows.</p>
+            }
+            else
+            {
+                <div class="table-scroll">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                @foreach (var col in _testRows[0].Keys)
+                                {
+                                    <th>@col</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _testRows)
+                            {
+                                <tr>
+                                    @foreach (var val in row.Values)
+                                    {
+                                        <td>@(val?.ToString() ?? "(null)")</td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private bool _enabled;
+    private string _connectionString = string.Empty;
+    private string _query = string.Empty;
+    private string _poolColumn = "Pool";
+    private string _quantityColumn = "Quantity";
+    private int _refreshInterval = 60;
+
+    private bool _saving;
+    private string? _saveError;
+    private string? _saveSuccess;
+
+    private bool _testing;
+    private string? _testError;
+    private List<Dictionary<string, object?>>? _testRows;
+
+    protected override void OnInitialized()
+    {
+        var s = ErpOptions.CurrentValue;
+        _enabled = s.Enabled;
+        _connectionString = s.ConnectionString;
+        _query = s.Query;
+        _poolColumn = string.IsNullOrWhiteSpace(s.PoolColumn) ? "Pool" : s.PoolColumn;
+        _quantityColumn = string.IsNullOrWhiteSpace(s.QuantityColumn) ? "Quantity" : s.QuantityColumn;
+        _refreshInterval = Math.Max(10, s.RefreshIntervalSeconds);
+    }
+
+    private async Task SaveSettings()
+    {
+        _saving = true;
+        _saveError = null;
+        _saveSuccess = null;
+        try
+        {
+            var interval = Math.Max(10, _refreshInterval);
+            var payload = new
+            {
+                ErpSettings = new
+                {
+                    Enabled = _enabled,
+                    ConnectionString = _connectionString.Trim(),
+                    Query = _query.Trim(),
+                    PoolColumn = string.IsNullOrWhiteSpace(_poolColumn) ? "Pool" : _poolColumn.Trim(),
+                    QuantityColumn = string.IsNullOrWhiteSpace(_quantityColumn) ? "Quantity" : _quantityColumn.Trim(),
+                    RefreshIntervalSeconds = interval
+                }
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(payload,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            var path = Path.Combine(Env.ContentRootPath, "erp-settings.json");
+            await File.WriteAllTextAsync(path, json);
+            _saveSuccess = "Settings saved. The polling service will pick up changes within 30 seconds.";
+        }
+        catch (Exception ex)
+        {
+            _saveError = $"Failed to save: {ex.Message}";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task TestConnection()
+    {
+        _testing = true;
+        _testError = null;
+        _testRows = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_connectionString))
+            {
+                _testError = "Connection string is required.";
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(_query))
+            {
+                _testError = "Query is required.";
+                return;
+            }
+
+            var testSettings = new ErpSettings
+            {
+                Enabled = true,
+                ConnectionString = _connectionString.Trim(),
+                Query = _query.Trim(),
+                PoolColumn = string.IsNullOrWhiteSpace(_poolColumn) ? "Pool" : _poolColumn.Trim(),
+                QuantityColumn = string.IsNullOrWhiteSpace(_quantityColumn) ? "Quantity" : _quantityColumn.Trim(),
+                RefreshIntervalSeconds = Math.Max(10, _refreshInterval)
+            };
+            _testRows = await ErpDataService.TestConnectionAsync(testSettings, 5);
+        }
+        catch (Exception ex)
+        {
+            _testError = $"Connection failed: {ex.Message}";
+        }
+        finally
+        {
+            _testing = false;
+        }
+    }
+}

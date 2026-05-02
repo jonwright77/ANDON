@@ -6,6 +6,10 @@ using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Optional ERP settings file — loaded after appsettings.json so it can override ErpSettings section.
+// The file is optional and reloads live when saved from the admin UI.
+builder.Configuration.AddJsonFile("erp-settings.json", optional: true, reloadOnChange: true);
+
 // ---- Database ----
 // Factory registered as singleton so Blazor Server circuits can create short-lived contexts per operation.
 // Also registers AndonDbContext as scoped for controllers and services.
@@ -31,6 +35,12 @@ builder.Services.AddAuthorization(options =>
 // ---- Services ----
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IIncidentService, IncidentService>();
+
+// ---- ERP integration ----
+builder.Services.Configure<ErpSettings>(builder.Configuration.GetSection("ErpSettings"));
+builder.Services.AddSingleton<ErpPollStatus>();
+builder.Services.AddTransient<IErpDataService, ErpDataService>();
+builder.Services.AddHostedService<ErpPollingService>();
 
 // ---- Razor Pages (for login/logout) ----
 builder.Services.AddRazorPages();

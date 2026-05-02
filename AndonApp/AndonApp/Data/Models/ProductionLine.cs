@@ -17,6 +17,12 @@ public class ProductionLine
 
     public bool IsActive { get; set; } = true;
 
+    [MaxLength(100)]
+    public string? Pool { get; set; }
+
+    public int? LineTypeId { get; set; }
+    public LineType? LineType { get; set; }
+
     public ICollection<Incident> Incidents { get; set; } = new List<Incident>();
     public ICollection<LineSchedule> Schedules { get; set; } = new List<LineSchedule>();
 }

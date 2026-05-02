@@ -28,6 +28,9 @@
 
     <!-- SignalR client (for Blazor Server components that connect to hubs) -->
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="8.0.0" />
+
+    <!-- ERP integration (supports legacy SQL Server 2008 R2+) -->
+    <PackageReference Include="Microsoft.Data.SqlClient" Version="5.2.2" />
   </ItemGroup>
 
 </Project>

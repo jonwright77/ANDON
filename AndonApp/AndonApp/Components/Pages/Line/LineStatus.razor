@@ -3,9 +3,12 @@
 @using AndonApp.Data.Models
 @using AndonApp.Services
 @using Microsoft.AspNetCore.SignalR.Client
+@using Microsoft.Extensions.Options
 @inject IDbContextFactory<AndonDbContext> DbFactory
 @inject IIncidentService IncidentService
 @inject NavigationManager Nav
+@inject ErpPollStatus ErpPollStatus
+@inject IOptionsMonitor<ErpSettings> ErpOptions
 @implements IAsyncDisposable
 @rendermode InteractiveServer
 
@@ -60,9 +63,9 @@ else
                     <div class="stat-card-sub">Line: @exOp.ToString("N0")</div>
                 }
             </div>
-            <div class="stat-card @GetStatCardClass()">
+            <div class="stat-card @GetStatCardClass() @GetBuiltStaleClass()">
                 <div class="stat-card-label">Built</div>
-                <div class="stat-card-value">–</div>
+                <div class="stat-card-value">@(_builtQuantity.HasValue ? _builtQuantity.Value.ToString("N0") : "–")</div>
             </div>
         </div>
 
@@ -249,6 +252,10 @@ else
 
     private HubConnection? _hubConnection;
 
+    // ERP BUILT card
+    private int? _builtQuantity;
+    private DateTime? _builtLastUpdated;
+
     // Clock + schedule + target
     private DateTime _now = DateTime.Now;
     private DayOfWeek _loadedDay;
@@ -269,6 +276,18 @@ else
         }
 
         _authorized = true;
+
+        // Seed BUILT from last successful ERP poll so the card shows immediately
+        if (!string.IsNullOrEmpty(_line.Pool))
+        {
+            var erpSnap = ErpPollStatus.GetSnapshot();
+            if (erpSnap.results.TryGetValue(_line.Pool, out var initialQty))
+            {
+                _builtQuantity = initialQty;
+                _builtLastUpdated = erpSnap.at;
+            }
+        }
+
         await LoadIncidentsAsync();
         await LoadScheduleAsync();
         await LoadTodayTargetAsync();
@@ -435,6 +454,16 @@ else
             });
         });
 
+        _hubConnection.On<int>("BuiltUpdated", qty =>
+        {
+            _ = InvokeAsync(() =>
+            {
+                _builtQuantity = qty;
+                _builtLastUpdated = DateTime.UtcNow;
+                StateHasChanged();
+            });
+        });
+
         await _hubConnection.StartAsync();
         await _hubConnection.InvokeAsync("JoinLine", Slug, Token);
     }
@@ -470,6 +499,15 @@ else
 
     private string GetIncidentClass(IncidentSummaryDto i) =>
         i.Severity == Severity.RED ? "incident-red" : "incident-amber";
+
+    private string GetBuiltStaleClass()
+    {
+        if (!_builtQuantity.HasValue || !_builtLastUpdated.HasValue) return string.Empty;
+        var thresholdSeconds = Math.Max(20, ErpOptions.CurrentValue.RefreshIntervalSeconds * 2);
+        return (DateTime.UtcNow - _builtLastUpdated.Value).TotalSeconds > thresholdSeconds
+            ? "stat-card-stale"
+            : string.Empty;
+    }
 
     private void ShowNewIncidentModal()
     {

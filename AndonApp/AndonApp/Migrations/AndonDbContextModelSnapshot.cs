@@ -83,9 +83,22 @@ namespace AndonApp.Migrations
                 b.Property<bool>("IsActive").HasColumnType("bit");
                 b.Property<string>("Name").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
                 b.Property<string>("Slug").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
+                b.Property<string>("Pool").HasMaxLength(100).HasColumnType("nvarchar(100)");
+                b.Property<int?>("LineTypeId").HasColumnType("int");
                 b.HasKey("Id");
                 b.HasIndex("Slug").IsUnique();
+                b.HasIndex("LineTypeId");
                 b.ToTable("ProductionLines");
+            });
+
+            modelBuilder.Entity("AndonApp.Data.Models.LineType", b =>
+            {
+                b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int");
+                SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                b.Property<string>("Name").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
+                b.Property<string>("Description").HasMaxLength(500).HasColumnType("nvarchar(500)");
+                b.HasKey("Id");
+                b.ToTable("LineTypes");
             });
 
             modelBuilder.Entity("AndonApp.Data.Models.LineTarget", b =>
@@ -173,8 +186,18 @@ namespace AndonApp.Migrations
 
             modelBuilder.Entity("AndonApp.Data.Models.ProductionLine", b =>
             {
+                b.HasOne("AndonApp.Data.Models.LineType", "LineType")
+                    .WithMany("ProductionLines")
+                    .HasForeignKey("LineTypeId")
+                    .OnDelete(DeleteBehavior.SetNull);
+                b.Navigation("LineType");
                 b.Navigation("Incidents");
                 b.Navigation("Schedules");
+            });
+
+            modelBuilder.Entity("AndonApp.Data.Models.LineType", b =>
+            {
+                b.Navigation("ProductionLines");
             });
 
             modelBuilder.Entity("AndonApp.Data.Models.LineTarget", b =>

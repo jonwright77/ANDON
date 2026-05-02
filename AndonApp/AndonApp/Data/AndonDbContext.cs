@@ -16,6 +16,7 @@ public class AndonDbContext : DbContext
     public DbSet<ScheduleBreak> ScheduleBreaks => Set<ScheduleBreak>();
     public DbSet<LineTarget> LineTargets => Set<LineTarget>();
     public DbSet<LineOperatorTarget> LineOperatorTargets => Set<LineOperatorTarget>();
+    public DbSet<LineType> LineTypes => Set<LineType>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -96,6 +97,13 @@ public class AndonDbContext : DbContext
             .WithMany()
             .HasForeignKey(t => t.ProductionLineId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // LineType → ProductionLine: nullable FK, set null on delete
+        modelBuilder.Entity<ProductionLine>()
+            .HasOne(l => l.LineType)
+            .WithMany(t => t.ProductionLines)
+            .HasForeignKey(l => l.LineTypeId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // LineOperatorTargets: one per line per day, set from the production line screen
         modelBuilder.Entity<LineOperatorTarget>()

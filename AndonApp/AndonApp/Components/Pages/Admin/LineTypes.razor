@@ -1,0 +1,248 @@
+@page "/admin/line-types"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
+@layout AndonApp.Components.Layout.AdminLayout
+@using AndonApp.Data
+@using AndonApp.Data.Models
+@inject IDbContextFactory<AndonDbContext> DbFactory
+@rendermode InteractiveServer
+
+<PageTitle>Line Types – Admin</PageTitle>
+
+<div class="admin-page">
+    <div class="page-header">
+        <h1>Line Types</h1>
+        <button class="btn btn-primary" @onclick="() => OpenModal(null)">+ New Type</button>
+    </div>
+
+    @if (_types == null)
+    {
+        <p>Loading...</p>
+    }
+    else if (!_types.Any())
+    {
+        <p class="empty-state">No line types defined yet.</p>
+    }
+    else
+    {
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Description</th>
+                    <th>Lines</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var type in _types)
+                {
+                    <tr>
+                        <td><strong>@type.Name</strong></td>
+                        <td>@(type.Description ?? "—")</td>
+                        <td>
+                            @if (_lineCountByType.TryGetValue(type.Id, out var count) && count > 0)
+                            {
+                                <span class="badge badge-blue">@count line@(count == 1 ? "" : "s")</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenModal(type)">Edit</button>
+                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(type)">Delete</button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@if (_showModal)
+{
+    <div class="modal-backdrop" @onclick="CloseModal">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h2>@(_editing == null ? "New Line Type" : "Edit Line Type")</h2>
+                <button class="modal-close" @onclick="CloseModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(_modalError))
+                {
+                    <div class="alert alert-error">@_modalError</div>
+                }
+                <div class="form-group">
+                    <label>Name *</label>
+                    <input class="form-control" @bind="_form.Name" placeholder="e.g. Assembly" maxlength="100" />
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea class="form-control" @bind="_form.Description" rows="3"
+                              placeholder="Optional description of this line type" maxlength="500"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveType" disabled="@_saving">
+                    @(_saving ? "Saving..." : "Save")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteTarget != null)
+{
+    <div class="modal-backdrop">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h2>Delete Line Type</h2>
+            </div>
+            <div class="modal-body">
+                <p>Delete <strong>@_deleteTarget.Name</strong>?</p>
+                @if (_lineCountByType.TryGetValue(_deleteTarget.Id, out var usedBy) && usedBy > 0)
+                {
+                    <p class="text-muted">
+                        This type is assigned to <strong>@usedBy</strong> production line@(usedBy == 1 ? "" : "s").
+                        Those lines will have their type cleared.
+                    </p>
+                }
+                @if (!string.IsNullOrEmpty(_deleteError))
+                {
+                    <div class="alert alert-error">@_deleteError</div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="() => _deleteTarget = null">Cancel</button>
+                <button class="btn btn-danger" @onclick="DeleteType">Delete</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<LineType>? _types;
+    private Dictionary<int, int> _lineCountByType = new();
+    private bool _showModal;
+    private LineType? _editing;
+    private TypeForm _form = new();
+    private string? _modalError;
+    private bool _saving;
+    private LineType? _deleteTarget;
+    private string? _deleteError;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _types = await db.LineTypes.OrderBy(t => t.Name).ToListAsync();
+        _lineCountByType = await db.ProductionLines
+            .Where(l => l.LineTypeId != null)
+            .GroupBy(l => l.LineTypeId!.Value)
+            .Select(g => new { TypeId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.TypeId, x => x.Count);
+    }
+
+    private void OpenModal(LineType? type)
+    {
+        _editing = type;
+        _form = type == null
+            ? new TypeForm()
+            : new TypeForm { Name = type.Name, Description = type.Description };
+        _modalError = null;
+        _showModal = true;
+    }
+
+    private void CloseModal()
+    {
+        _showModal = false;
+        _editing = null;
+        _modalError = null;
+    }
+
+    private async Task SaveType()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Name))
+        {
+            _modalError = "Name is required.";
+            return;
+        }
+
+        _saving = true;
+        _modalError = null;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var name = _form.Name.Trim();
+
+            if (_editing == null)
+            {
+                if (await db.LineTypes.AnyAsync(t => t.Name == name))
+                {
+                    _modalError = $"A type named '{name}' already exists.";
+                    return;
+                }
+                db.LineTypes.Add(new LineType
+                {
+                    Name = name,
+                    Description = string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim()
+                });
+            }
+            else
+            {
+                if (await db.LineTypes.AnyAsync(t => t.Name == name && t.Id != _editing.Id))
+                {
+                    _modalError = $"A type named '{name}' already exists.";
+                    return;
+                }
+                var entity = await db.LineTypes.FindAsync(_editing.Id);
+                if (entity != null)
+                {
+                    entity.Name = name;
+                    entity.Description = string.IsNullOrWhiteSpace(_form.Description) ? null : _form.Description.Trim();
+                }
+            }
+
+            await db.SaveChangesAsync();
+            CloseModal();
+            await LoadAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void ConfirmDelete(LineType type)
+    {
+        _deleteTarget = type;
+        _deleteError = null;
+    }
+
+    private async Task DeleteType()
+    {
+        if (_deleteTarget == null) return;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var entity = await db.LineTypes.FindAsync(_deleteTarget.Id);
+            if (entity != null) db.LineTypes.Remove(entity);
+            await db.SaveChangesAsync();
+            _deleteTarget = null;
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _deleteError = $"Delete failed: {ex.Message}";
+        }
+    }
+
+    private class TypeForm
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+    }
+}
