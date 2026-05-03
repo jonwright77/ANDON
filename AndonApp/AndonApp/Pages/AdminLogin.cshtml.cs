@@ -13,11 +13,13 @@ public class AdminLoginModel : PageModel
 {
     private readonly AndonDbContext _db;
     private readonly LoginAttemptTracker _tracker;
+    private readonly ILogger<AdminLoginModel> _logger;
 
-    public AdminLoginModel(AndonDbContext db, LoginAttemptTracker tracker)
+    public AdminLoginModel(AndonDbContext db, LoginAttemptTracker tracker, ILogger<AdminLoginModel> logger)
     {
         _db = db;
         _tracker = tracker;
+        _logger = logger;
     }
 
     public string? Error { get; private set; }
@@ -33,6 +35,7 @@ public class AdminLoginModel : PageModel
     public async Task<IActionResult> OnPostAsync(string username, string password)
     {
         Username = username ?? string.Empty;
+        var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
         if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
         {
@@ -44,6 +47,7 @@ public class AdminLoginModel : PageModel
         {
             var remaining = _tracker.LockoutRemaining(username);
             var minutes = (int)Math.Ceiling(remaining.TotalMinutes);
+            _logger.LogWarning("AUDIT: Admin login blocked — account locked. User={Username} IP={IP}", username, ip);
             Error = $"Account locked after too many failed attempts. Try again in {minutes} minute(s).";
             return Page();
         }
@@ -53,11 +57,13 @@ public class AdminLoginModel : PageModel
         if (user == null || !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
         {
             _tracker.RecordFailure(username);
+            _logger.LogWarning("AUDIT: Admin login failed. User={Username} IP={IP}", username, ip);
             Error = "Invalid username or password.";
             return Page();
         }
 
         _tracker.RecordSuccess(username);
+        _logger.LogInformation("AUDIT: Admin login succeeded. User={Username} IP={IP}", username, ip);
 
         var claims = new List<Claim>
         {

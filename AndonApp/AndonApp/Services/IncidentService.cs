@@ -48,6 +48,10 @@ public class IncidentService : IIncidentService
         await _db.Entry(incident).Reference(i => i.AndonCode).LoadAsync();
         await _db.Entry(incident.AndonCode).Collection(c => c.Recipients).LoadAsync();
 
+        _logger.LogInformation(
+            "AUDIT: Incident created. Id={Id} Line={Line} Code={Code} Severity={Severity}",
+            incident.Id, incident.ProductionLine.Name, incident.AndonCode.Code, incident.Severity);
+
         // Broadcast via SignalR
         var slug = incident.ProductionLine.Slug;
         await _hub.Clients.Group($"line:{slug}").SendAsync("IncidentCreated", new IncidentSummaryDto(
@@ -80,6 +84,10 @@ public class IncidentService : IIncidentService
         incident.Status = IncidentStatus.CLOSED;
         incident.ClosedAt = DateTime.UtcNow;
         await _db.SaveChangesAsync();
+
+        _logger.LogInformation(
+            "AUDIT: Incident closed. Id={Id} Line={Line} Code={Code} Severity={Severity}",
+            incident.Id, incident.ProductionLine.Name, incident.AndonCode.Code, incident.Severity);
 
         var slug = incident.ProductionLine.Slug;
         await _hub.Clients.Group($"line:{slug}").SendAsync("IncidentClosed", incident.Id);

@@ -297,7 +297,7 @@ The repository has no `.gitignore`. The `bin/` and `obj/` directories are being 
 | M3 | Missing HTTP security headers | MEDIUM | ✅ Fixed — `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, and `Content-Security-Policy` added via middleware in `Program.cs`. |
 | M4 | Access token in URL query string | MEDIUM | ✅ Mitigated — `Referrer-Policy: strict-origin` (from M3) prevents the query-string token leaking in Referrer headers. Token still appears in server access logs; use a secrets manager for access logs in production. |
 | M5 | `AdditionalInfo` not validated at DTO boundary | MEDIUM | ✅ Fixed — `[MaxLength(1000)]` added to `CreateIncidentDto`; `[ApiController]` returns 400 on violation. |
-| L1 | Default admin credentials with no forced change | LOW | ⬜ Open |
-| L2 | Cookie `Secure` policy not explicitly set | LOW | ⬜ Open |
-| L3 | No audit logging | LOW | ⬜ Open |
+| L1 | Default admin credentials with no forced change | LOW | ✅ Fixed — `DbSeeder` checks the default password hash at every startup and logs a `LogWarning` if it has not been changed. |
+| L2 | Cookie `Secure` policy not explicitly set | LOW | ✅ Fixed — `HttpOnly = true`, `SecurePolicy = Always`, `SameSite = Strict` added to cookie options. |
+| L3 | No audit logging | LOW | ✅ Fixed — structured `AUDIT:` log entries added for admin login (success/failure/lockout + IP), incident creation, and incident closure. |
 | L4 | No `.gitignore` | LOW | ✅ Fixed (resolved as part of C1). |

@@ -1,11 +1,12 @@
 using AndonApp.Data.Models;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace AndonApp.Data;
 
 public static class DbSeeder
 {
-    public static async Task SeedAsync(AndonDbContext db)
+    public static async Task SeedAsync(AndonDbContext db, ILogger logger)
     {
         await db.Database.MigrateAsync();
 
@@ -51,5 +52,14 @@ public static class DbSeeder
             insecureTokenLine.AccessToken = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
 
         await db.SaveChangesAsync();
+
+        // Warn loudly if the default admin password has never been changed
+        var adminUser = await db.AdminUsers.FirstOrDefaultAsync(u => u.Username == "admin");
+        if (adminUser != null && BCrypt.Net.BCrypt.Verify("Admin@123", adminUser.PasswordHash))
+        {
+            logger.LogWarning(
+                "SECURITY WARNING: The admin account is still using the default password 'Admin@123'. " +
+                "Change it immediately before deploying to production.");
+        }
     }
 }
