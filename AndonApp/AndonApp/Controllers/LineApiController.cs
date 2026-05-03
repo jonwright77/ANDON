@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using AndonApp.Data;
 using AndonApp.Data.Models;
 using AndonApp.Services;
@@ -84,4 +85,7 @@ public class LineApiController : ControllerBase
     }
 }
 
-public record CreateIncidentDto(int AndonCodeId, string Severity, string? AdditionalInfo);
+public record CreateIncidentDto(
+    int AndonCodeId,
+    string Severity,
+    [property: MaxLength(1000)] string? AdditionalInfo);

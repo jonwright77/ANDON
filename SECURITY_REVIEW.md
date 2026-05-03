@@ -122,23 +122,22 @@ The SQL query comes directly from `erp-settings.json` with no parsing or validat
 
 ---
 
-### H4 – All production line access tokens broadcast over SignalR from Overview
+### H4 – ~~All production line access tokens broadcast over SignalR from Overview~~ — FALSE POSITIVE
 
-**File:** `AndonApp/AndonApp/Components/Pages/Admin/Overview.razor`, lines 300–303
+**File:** `AndonApp/AndonApp/Components/Pages/Admin/Overview.razor`
 
-```csharp
-foreach (var card in _allCards)
-    await _hubConnection.InvokeAsync("JoinLine", card.Slug, card.AccessToken);
-```
+**Status: Closed — not a vulnerability in this architecture.**
 
-The admin overview page joins every SignalR group by sending every line's access token from the **browser** over the WebSocket. This means:
-- All tokens are visible in browser DevTools (Network > WS frames).
-- Any XSS vulnerability on the admin panel would expose all tokens at once.
-- The WebSocket traffic, if not using TLS, exposes all tokens in plaintext.
+This finding was initially raised because `Overview.razor` calls `JoinLine(slug, token)` for every production line. However, investigation during remediation revealed that in **Blazor Server**, `HubConnectionBuilder.WithUrl().Build()` creates a **.NET SignalR client that runs inside the ASP.NET Core server process**, not in the browser.
 
-**Recommendations:**
-- Add a separate admin-only SignalR hub method (e.g., `AdminJoinAllLines`) that validates the admin cookie server-side and adds the connection to all line groups without requiring tokens.
-- Access tokens should never transit the browser for admin use cases.
+The consequence is:
+- The `JoinLine` calls travel **server-to-server** over a loopback/internal connection.
+- The access tokens **never transit the browser** and are **never visible in browser DevTools**.
+- There is no WebSocket frame the user's browser can inspect.
+
+An attempt to replace the pattern with an `AdminJoinAllLines` hub method (checking `Context.User.IsInRole("Admin")`) was reverted because the server-side hub connection carries no browser authentication cookies, causing the check to always fail and the page to break.
+
+**If the app is ever ported to Blazor WebAssembly** the concern would become real, as hub connections would then originate from the browser. At that point, implement an `AdminJoinAllLines` hub method that validates a short-lived signed token issued server-side (e.g., via `IDataProtectionProvider`).
 
 ---
 
@@ -283,15 +282,22 @@ The repository has no `.gitignore`. The `bin/` and `obj/` directories are being 
 
 ---
 
-## Quick-Win Priority Order
+## Implementation Status
 
-1. **Revoke the Gmail app password immediately** (C1)
-2. **Add a `.gitignore`** and untrack `email-settings.json` (C1, L4)
-3. **Fix the seed access token** (C2)
-4. **Change logout to POST** (H2) — 5-minute fix
-5. **Add login rate limiting** (H1)
-6. **Add security headers middleware** (M3) — 5-minute fix
-7. **Set cookie `SecurePolicy = Always`** (L2) — 1-line fix
-8. **Restrict ERP to a read-only SQL account** (H3)
-9. **Refactor Overview SignalR to admin-only join** (H4)
-10. **Set `AllowedHosts` to real domain in production** (M1)
+| # | Finding | Severity | Status |
+|---|---------|----------|--------|
+| C1 | Plaintext SMTP credentials / no `.gitignore` | CRITICAL | ✅ Fixed — `.gitignore` added, credential files excluded, build artifacts untracked. **Action required: revoke & regenerate Gmail app password.** |
+| C2 | Predictable seed access token | CRITICAL | ✅ Fixed — token now generated with two GUIDs; existing insecure tokens replaced on startup. |
+| H1 | No brute-force protection on login | HIGH | ✅ Fixed — `LoginAttemptTracker` locks account for 15 min after 5 failures. |
+| H2 | Logout via HTTP GET (CSRF) | HIGH | ✅ Fixed — logout requires POST with antiforgery token; GET redirects to login without signing out. |
+| H3 | ERP query without SELECT-only enforcement | HIGH | ✅ Fixed — `ValidateSelectQuery` rejects non-SELECT queries and semicolons. |
+| H4 | SignalR tokens visible in browser DevTools | HIGH | ⬜ Closed as false positive — Blazor Server hub connections are server-to-server; tokens never transit the browser. |
+| M1 | `AllowedHosts: "*"` | MEDIUM | ✅ Fixed — production default tightened to `localhost;127.0.0.1`; `appsettings.Development.json` overrides to `*` for dev. **Set to your real hostname before deploying.** |
+| M2 | Credentials stored as plain JSON on disk | MEDIUM | ✅ Partially fixed — `AddEnvironmentVariables()` re-added after JSON files so env vars always override disk files in production. Files remain gitignored. OS-level file permissions are still recommended. |
+| M3 | Missing HTTP security headers | MEDIUM | ✅ Fixed — `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, and `Content-Security-Policy` added via middleware in `Program.cs`. |
+| M4 | Access token in URL query string | MEDIUM | ✅ Mitigated — `Referrer-Policy: strict-origin` (from M3) prevents the query-string token leaking in Referrer headers. Token still appears in server access logs; use a secrets manager for access logs in production. |
+| M5 | `AdditionalInfo` not validated at DTO boundary | MEDIUM | ✅ Fixed — `[MaxLength(1000)]` added to `CreateIncidentDto`; `[ApiController]` returns 400 on violation. |
+| L1 | Default admin credentials with no forced change | LOW | ⬜ Open |
+| L2 | Cookie `Secure` policy not explicitly set | LOW | ⬜ Open |
+| L3 | No audit logging | LOW | ⬜ Open |
+| L4 | No `.gitignore` | LOW | ✅ Fixed (resolved as part of C1). |
