@@ -39,10 +39,16 @@ public static class DbSeeder
             {
                 Name = "Line A",
                 Slug = "line-a",
-                AccessToken = "demo-token-linea-1234",
+                AccessToken = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N"),
                 IsActive = true
             });
         }
+
+        // Replace any line that still carries the insecure demo token from earlier seeds
+        var insecureTokenLine = await db.ProductionLines
+            .FirstOrDefaultAsync(l => l.AccessToken == "demo-token-linea-1234");
+        if (insecureTokenLine != null)
+            insecureTokenLine.AccessToken = Guid.NewGuid().ToString("N") + Guid.NewGuid().ToString("N");
 
         await db.SaveChangesAsync();
     }

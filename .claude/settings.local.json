@@ -8,7 +8,9 @@
       "Bash(export PATH=\"$PATH:/usr/local/share/dotnet:/opt/homebrew/bin\")",
       "Bash(dotnet --version)",
       "Bash(dotnet restore:*)",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(awk ' *)",
+      "Bash(git *)"
     ]
   }
 }

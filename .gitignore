@@ -1,0 +1,35 @@
+## .NET build artifacts
+bin/
+obj/
+*.user
+*.suo
+*.vs/
+.vs/
+
+## NuGet
+*.nupkg
+*.snupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## Publish output
+publish/
+**/Properties/PublishProfiles/
+
+## Secrets and local credential overrides — NEVER commit these
+email-settings.json
+erp-settings.json
+
+## User secrets (dotnet user-secrets)
+secrets.json
+
+## Environment-specific overrides that may contain secrets
+appsettings.Local.json
+appsettings.Production.json
+
+## IDE
+.idea/
+*.DS_Store
+Thumbs.db
