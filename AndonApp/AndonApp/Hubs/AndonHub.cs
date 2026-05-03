@@ -29,4 +29,20 @@ public class AndonHub : Hub
     {
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, $"line:{slug}");
     }
+
+    // Admin-only: joins all active line groups server-side — no tokens sent to browser.
+    public async Task AdminJoinAllLines()
+    {
+        if (Context.User?.IsInRole("Admin") != true)
+            throw new HubException("Admin access required.");
+
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        var slugs = await db.ProductionLines
+            .Where(l => l.IsActive)
+            .Select(l => l.Slug)
+            .ToListAsync();
+
+        foreach (var slug in slugs)
+            await Groups.AddToGroupAsync(Context.ConnectionId, $"line:{slug}");
+    }
 }

@@ -1,4 +1,5 @@
 using AndonApp.Data;
+using AndonApp.Services;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
@@ -11,8 +12,13 @@ namespace AndonApp.Pages;
 public class AdminLoginModel : PageModel
 {
     private readonly AndonDbContext _db;
+    private readonly LoginAttemptTracker _tracker;
 
-    public AdminLoginModel(AndonDbContext db) => _db = db;
+    public AdminLoginModel(AndonDbContext db, LoginAttemptTracker tracker)
+    {
+        _db = db;
+        _tracker = tracker;
+    }
 
     public string? Error { get; private set; }
     public string Username { get; private set; } = string.Empty;
@@ -34,13 +40,24 @@ public class AdminLoginModel : PageModel
             return Page();
         }
 
+        if (_tracker.IsLockedOut(username))
+        {
+            var remaining = _tracker.LockoutRemaining(username);
+            var minutes = (int)Math.Ceiling(remaining.TotalMinutes);
+            Error = $"Account locked after too many failed attempts. Try again in {minutes} minute(s).";
+            return Page();
+        }
+
         var user = await _db.AdminUsers.FirstOrDefaultAsync(u => u.Username == username);
 
         if (user == null || !BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
         {
+            _tracker.RecordFailure(username);
             Error = "Invalid username or password.";
             return Page();
         }
+
+        _tracker.RecordSuccess(username);
 
         var claims = new List<Claim>
         {

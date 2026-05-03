@@ -12,7 +12,10 @@
             <a href="/admin/email-settings">Email Settings</a>
             <a href="/admin/erp-settings">ERP Settings</a>
             <button class="theme-toggle" onclick="andonTheme.toggle()" title="Toggle dark mode"></button>
-            <a href="/admin/logout" class="btn-link">Logout</a>
+            <form method="post" action="/admin/logout" @formname="logout-form" style="display:inline">
+                <AntiforgeryToken />
+                <button type="submit" class="btn-link">Logout</button>
+            </form>
         </div>
     </nav>
     <main class="admin-main">

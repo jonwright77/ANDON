@@ -34,6 +34,7 @@ builder.Services.AddAuthorization(options =>
 });
 
 // ---- Services ----
+builder.Services.AddSingleton<LoginAttemptTracker>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IIncidentService, IncidentService>();
 

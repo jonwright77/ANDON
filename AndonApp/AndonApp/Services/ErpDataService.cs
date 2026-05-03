@@ -19,6 +19,7 @@ public class ErpDataService : IErpDataService
 
     public async Task<List<Dictionary<string, object?>>> TestConnectionAsync(ErpSettings settings, int maxRows = 5)
     {
+        ValidateSelectQuery(settings.Query);
         var rows = new List<Dictionary<string, object?>>();
         await using var conn = new SqlConnection(settings.ConnectionString);
         await conn.OpenAsync();
@@ -36,8 +37,18 @@ public class ErpDataService : IErpDataService
         return rows;
     }
 
+    private static void ValidateSelectQuery(string query)
+    {
+        var trimmed = query.Trim();
+        if (!trimmed.StartsWith("SELECT", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("ERP query must start with SELECT.");
+        if (trimmed.Contains(';'))
+            throw new InvalidOperationException("ERP query must not contain semicolons (multi-statement queries are not permitted).");
+    }
+
     private static async Task<Dictionary<string, int>> FetchAsync(ErpSettings settings)
     {
+        ValidateSelectQuery(settings.Query);
         var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         await using var conn = new SqlConnection(settings.ConnectionString);
         await conn.OpenAsync();
