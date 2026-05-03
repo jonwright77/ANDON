@@ -24,10 +24,16 @@
     }
     else
     {
+        var groups = _rows
+            .GroupBy(r => r.LineTypeName)
+            .OrderBy(g => g.Key == null ? "￿" : g.Key)
+            .ToList();
+
         <table class="data-table">
             <thead>
                 <tr>
                     <th>Production Line</th>
+                    <th>Type</th>
                     <th>Working Hours</th>
                     <th>Scheduled Mins</th>
                     <th>Target</th>
@@ -36,76 +42,92 @@
                 </tr>
             </thead>
             <tbody>
-                @foreach (var row in _rows)
+                @foreach (var group in groups)
                 {
-                    var variance = row.LineTarget.HasValue && row.AdminTarget.HasValue
-                        ? row.LineTarget.Value - row.AdminTarget.Value
-                        : (int?)null;
-
-                    <tr>
-                        <td><strong>@row.LineName</strong></td>
-                        <td>
-                            @if (row.Schedule != null && row.Schedule.IsWorkday)
-                            {
-                                <span>@Fmt(row.Schedule.StartTime) – @Fmt(row.Schedule.EndTime)</span>
-                                @if (row.Schedule.Breaks.Any())
-                                {
-                                    <div class="todays-breaks">
-                                        @foreach (var b in row.Schedule.Breaks.OrderBy(x => x.StartTime))
-                                        {
-                                            <span class="review-break-tag">@b.Name @Fmt(b.StartTime)–@Fmt(b.EndTime)</span>
-                                        }
-                                    </div>
-                                }
-                            }
-                            else
-                            {
-                                <span class="text-muted">No schedule</span>
-                            }
-                        </td>
-                        <td>
-                            @if (row.ScheduledMinutes.HasValue)
-                            {
-                                <span>@FormatMinutes(row.ScheduledMinutes.Value)</span>
-                            }
-                            else
-                            {
-                                <span class="text-muted">–</span>
-                            }
-                        </td>
-                        <td>
-                            @if (row.AdminTarget.HasValue)
-                            {
-                                <strong class="todays-target-value">@row.AdminTarget.Value.ToString("N0")</strong>
-                            }
-                            else
-                            {
-                                <span class="text-muted">–</span>
-                            }
-                        </td>
-                        <td>
-                            @if (row.LineTarget.HasValue)
-                            {
-                                <strong class="todays-target-value">@row.LineTarget.Value.ToString("N0")</strong>
-                            }
-                            else
-                            {
-                                <span class="text-muted">–</span>
-                            }
-                        </td>
-                        <td>
-                            @if (variance.HasValue)
-                            {
-                                <span class="todays-variance @(variance.Value > 0 ? "variance-up" : variance.Value < 0 ? "variance-down" : "variance-zero")">
-                                    @(variance.Value > 0 ? "+" : "")@variance.Value.ToString("N0")
-                                </span>
-                            }
-                            else
-                            {
-                                <span class="text-muted">–</span>
-                            }
-                        </td>
+                    <tr class="table-group-header">
+                        <td colspan="7">@(group.Key ?? "Untyped")</td>
                     </tr>
+                    @foreach (var row in group.OrderBy(r => r.LineName))
+                    {
+                        var variance = row.LineTarget.HasValue && row.AdminTarget.HasValue
+                            ? row.LineTarget.Value - row.AdminTarget.Value
+                            : (int?)null;
+
+                        <tr>
+                            <td><strong>@row.LineName</strong></td>
+                            <td>
+                                @if (row.LineTypeName != null)
+                                {
+                                    <span class="badge badge-blue">@row.LineTypeName</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td>
+                                @if (row.Schedule != null && row.Schedule.IsWorkday)
+                                {
+                                    <span>@Fmt(row.Schedule.StartTime) – @Fmt(row.Schedule.EndTime)</span>
+                                    @if (row.Schedule.Breaks.Any())
+                                    {
+                                        <div class="todays-breaks">
+                                            @foreach (var b in row.Schedule.Breaks.OrderBy(x => x.StartTime))
+                                            {
+                                                <span class="review-break-tag">@b.Name @Fmt(b.StartTime)–@Fmt(b.EndTime)</span>
+                                            }
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <span class="text-muted">No schedule</span>
+                                }
+                            </td>
+                            <td>
+                                @if (row.ScheduledMinutes.HasValue)
+                                {
+                                    <span>@FormatMinutes(row.ScheduledMinutes.Value)</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">–</span>
+                                }
+                            </td>
+                            <td>
+                                @if (row.AdminTarget.HasValue)
+                                {
+                                    <strong class="todays-target-value">@row.AdminTarget.Value.ToString("N0")</strong>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">–</span>
+                                }
+                            </td>
+                            <td>
+                                @if (row.LineTarget.HasValue)
+                                {
+                                    <strong class="todays-target-value">@row.LineTarget.Value.ToString("N0")</strong>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">–</span>
+                                }
+                            </td>
+                            <td>
+                                @if (variance.HasValue)
+                                {
+                                    <span class="todays-variance @(variance.Value > 0 ? "variance-up" : variance.Value < 0 ? "variance-down" : "variance-zero")">
+                                        @(variance.Value > 0 ? "+" : "")@variance.Value.ToString("N0")
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">–</span>
+                                }
+                            </td>
+                        </tr>
+                    }
                 }
             </tbody>
         </table>
@@ -125,6 +147,7 @@
         await using var db = await DbFactory.CreateDbContextAsync();
 
         var lines = await db.ProductionLines
+            .Include(l => l.LineType)
             .Where(l => l.IsActive)
             .OrderBy(l => l.Name)
             .ToListAsync();
@@ -158,6 +181,7 @@
             return new LineRow
             {
                 LineName = line.Name,
+                LineTypeName = line.LineType?.Name,
                 Schedule = schedule,
                 ScheduledMinutes = scheduledMins,
                 AdminTarget = adminTargets.FirstOrDefault(t => t.ProductionLineId == line.Id)?.Target,
@@ -178,6 +202,7 @@
     private class LineRow
     {
         public string LineName { get; set; } = string.Empty;
+        public string? LineTypeName { get; set; }
         public LineSchedule? Schedule { get; set; }
         public int? ScheduledMinutes { get; set; }
         public int? AdminTarget { get; set; }

@@ -640,6 +640,18 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
 .data-table tr:hover td { background: var(--gray-50); }
 .data-table td code { font-size: 0.85rem; background: var(--gray-100); padding: 0.15rem 0.4rem; border-radius: 4px; }
 
+.table-group-header td {
+  background: var(--gray-100);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  padding: 0.45rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+.table-group-header:hover td { background: var(--gray-100) !important; }
+
 .url-cell { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .url-text { font-size: 0.78rem; color: var(--gray-700); max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -903,7 +915,7 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
   border-radius: var(--radius);
   padding: 0.5rem;
   min-height: 90px;
-  background: var(--white);
+  background: var(--surface);
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
@@ -937,7 +949,7 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
 
 .calendar-target-set {
   font-size: 1.3rem;
-  color: var(--gray-900);
+  color: var(--gray-700);
   background: var(--gray-100);
 }
 .calendar-target-set:hover { background: var(--gray-200); }
@@ -956,6 +968,8 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
   font-size: 1rem;
   font-weight: 700;
   text-align: center;
+  background: var(--surface);
+  color: inherit;
 }
 
 .calendar-edit-actions {
@@ -1284,7 +1298,12 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
 }
 
 .overview-section {
+  margin: 1rem 1.5rem 1.25rem;
   padding: 1.25rem 1.5rem 0;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 2px solid var(--border);
+  box-shadow: var(--shadow);
 }
 
 .overview-section-header {
@@ -1376,6 +1395,63 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
   color: var(--text-secondary);
   padding: 4rem 0;
   font-size: 1rem;
+}
+
+/* ---- Totals rows (group subtotal + grand total) ---- */
+.overview-group-totals {
+  padding: 0.75rem 0 1.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.overview-grand-total {
+  margin: 0 1.5rem 2rem;
+  padding: 1rem 1.5rem;
+  background: var(--surface);
+  border-radius: var(--radius);
+  border: 2px solid var(--border);
+  box-shadow: var(--shadow);
+}
+
+.overview-totals-cards {
+  display: flex;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.overview-totals-card {
+  flex: 1;
+  border-radius: var(--radius);
+  padding: 1.2rem 1.75rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  background: rgba(25, 100, 200, 0.85);
+  color: var(--white);
+}
+
+.overview-totals-card-label {
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+  margin-bottom: 0.4rem;
+}
+
+.overview-totals-card-value {
+  font-size: 3rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--white);
+  line-height: 1;
+}
+
+/* Grand total cards — slightly larger still */
+.overview-totals-card-lg {
+  padding: 1.5rem 1.75rem;
+}
+
+.overview-totals-card-lg .overview-totals-card-value {
+  font-size: 3.5rem;
 }
 
 /* ============================================================
@@ -1527,12 +1603,15 @@ html.dark .admin-nav {
   background: #0d1117;
 }
 
+
 /* White-background elements that don't use a variable we override */
 html.dark .admin-shell .data-table,
 html.dark .admin-shell .modal,
 html.dark .admin-shell .schedule-card { background: var(--surface); }
 
 html.dark .admin-shell .data-table tr:hover td { background: #334155; }
+html.dark .admin-shell .table-group-header td,
+html.dark .admin-shell .table-group-header:hover td { background: #0f172a !important; }
 
 /* Form controls */
 html.dark .admin-shell .form-control {

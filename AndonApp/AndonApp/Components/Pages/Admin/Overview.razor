@@ -61,12 +61,18 @@
     }
     else
     {
-        @foreach (var group in GroupedCards)
+        var allGroups = GroupedCards.ToList();
+        var showSubtotals = allGroups.Count > 1;
+
+        @foreach (var group in allGroups)
         {
+            var groupCards = group.ToList();
+            var groupExpected = SumExpected(groupCards);
+            var groupBuilt = SumBuilt(groupCards);
             <div class="overview-section">
                 <div class="overview-section-header">@(group.Key ?? "Untyped")</div>
                 <div class="overview-grid">
-                    @foreach (var card in group)
+                    @foreach (var card in groupCards)
                     {
                         var expected = GetExpected(card);
                         var builtStale = IsBuiltStale(card);
@@ -91,8 +97,38 @@
                         </div>
                     }
                 </div>
+                @if (showSubtotals)
+                {
+                    <div class="overview-group-totals">
+                        <div class="overview-totals-cards">
+                            <div class="overview-totals-card">
+                                <div class="overview-totals-card-label">Expected</div>
+                                <div class="overview-totals-card-value">@(groupExpected.HasValue ? groupExpected.Value.ToString("N0") : "–")</div>
+                            </div>
+                            <div class="overview-totals-card">
+                                <div class="overview-totals-card-label">Built</div>
+                                <div class="overview-totals-card-value">@(groupBuilt.HasValue ? groupBuilt.Value.ToString("N0") : "–")</div>
+                            </div>
+                        </div>
+                    </div>
+                }
             </div>
         }
+
+        var grandExpected = SumExpected(VisibleCards);
+        var grandBuilt = SumBuilt(VisibleCards);
+        <div class="overview-grand-total">
+            <div class="overview-totals-cards">
+                <div class="overview-totals-card overview-totals-card-lg">
+                    <div class="overview-totals-card-label">Expected</div>
+                    <div class="overview-totals-card-value">@(grandExpected.HasValue ? grandExpected.Value.ToString("N0") : "–")</div>
+                </div>
+                <div class="overview-totals-card overview-totals-card-lg">
+                    <div class="overview-totals-card-label">Built</div>
+                    <div class="overview-totals-card-value">@(grandBuilt.HasValue ? grandBuilt.Value.ToString("N0") : "–")</div>
+                </div>
+            </div>
+        </div>
     }
 </div>
 
@@ -321,6 +357,20 @@
     {
         _selectedTypeIds.Clear();
         _showUntyped = false;
+    }
+
+    // ---- Totals helpers ----
+
+    private int? SumExpected(IEnumerable<LineCard> cards)
+    {
+        var values = cards.Select(GetExpected).Where(v => v.HasValue).Select(v => v!.Value).ToList();
+        return values.Count > 0 ? values.Sum() : null;
+    }
+
+    private static int? SumBuilt(IEnumerable<LineCard> cards)
+    {
+        var values = cards.Select(c => c.BuiltQuantity).Where(v => v.HasValue).Select(v => v!.Value).ToList();
+        return values.Count > 0 ? values.Sum() : null;
     }
 
     // ---- Card helpers ----
