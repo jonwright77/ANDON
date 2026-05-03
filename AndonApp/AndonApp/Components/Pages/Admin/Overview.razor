@@ -48,7 +48,10 @@
             </div>
         }
 
-        <div class="overview-clock">@_now.ToString("HH:mm:ss")</div>
+        <div class="overview-clock">
+            <div class="overview-clock-time">@_now.ToString("HH:mm:ss")</div>
+            <div class="overview-clock-date">@_now.ToString("dddd dd MMMM yyyy")</div>
+        </div>
     </div>
 
     @if (_loading)
