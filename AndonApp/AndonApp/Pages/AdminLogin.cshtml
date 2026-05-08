@@ -1,21 +1,25 @@
 @page "/admin/login"
 @model AndonApp.Pages.AdminLoginModel
+@inject Microsoft.Extensions.Options.IOptionsMonitor<AndonApp.Services.GeneralSettings> GeneralOptions
 @{
     Layout = null;
+    var company = GeneralOptions.CurrentValue.CompanyName;
+    var heading = string.IsNullOrWhiteSpace(company) ? "ANDON" : company;
+    var subheading = string.IsNullOrWhiteSpace(company) ? "Admin Sign In" : "ANDON Admin Sign In";
 }
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Admin Login – ANDON</title>
+    <title>@heading – Admin Sign In</title>
     <link rel="stylesheet" href="/css/app.css" />
 </head>
 <body>
 <div class="login-page">
     <div class="login-card">
-        <h1>ANDON</h1>
-        <h2>Admin Sign In</h2>
+        <h1>@heading</h1>
+        <h2>@subheading</h2>
 
         @if (!string.IsNullOrEmpty(Model.Error))
         {

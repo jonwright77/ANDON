@@ -1,6 +1,7 @@
 using AndonApp.Data.Models;
 using MailKit.Net.Smtp;
 using MailKit.Security;
+using Microsoft.Extensions.Options;
 using MimeKit;
 using System.Net;
 
@@ -16,13 +17,17 @@ public interface IEmailService
 public class EmailService : IEmailService
 {
     private readonly IConfiguration _config;
+    private readonly IOptionsMonitor<GeneralSettings> _generalSettings;
     private readonly ILogger<EmailService> _logger;
 
-    public EmailService(IConfiguration config, ILogger<EmailService> logger)
+    public EmailService(IConfiguration config, IOptionsMonitor<GeneralSettings> generalSettings, ILogger<EmailService> logger)
     {
         _config = config;
+        _generalSettings = generalSettings;
         _logger = logger;
     }
+
+    private string CompanyName => _generalSettings.CurrentValue.CompanyName;
 
     private string EmailMode => _config["EMAIL_MODE"] ?? "LogOnly";
     private string SmtpHost => _config["SMTP_HOST"] ?? "localhost";
@@ -49,7 +54,7 @@ public class EmailService : IEmailService
 
     // ---- Body builders ----
 
-    private static (string plain, string html) BuildOpenedBody(Incident incident)
+    private (string plain, string html) BuildOpenedBody(Incident incident)
     {
         var color = SeverityColor(incident.Severity);
         var severityLabel = incident.Severity.ToString();
@@ -69,12 +74,13 @@ public class EmailService : IEmailService
             bannerColor:   color,
             bannerEyebrow: $"{severityLabel} ALERT",
             bannerTitle:   "Incident Opened",
-            rows:          rows);
+            rows:          rows,
+            companyName:   CompanyName);
 
         return (plain, html);
     }
 
-    private static (string plain, string html) BuildClosedBody(Incident incident)
+    private (string plain, string html) BuildClosedBody(Incident incident)
     {
         var duration = incident.ClosedAt.HasValue
             ? FormatDuration(incident.ClosedAt.Value - incident.CreatedAt)
@@ -97,7 +103,8 @@ public class EmailService : IEmailService
             bannerColor:   "#1a7f1a",
             bannerEyebrow: "All Clear",
             bannerTitle:   "Incident Closed",
-            rows:          rows);
+            rows:          rows,
+            companyName:   CompanyName);
 
         return (plain, html);
     }
@@ -108,7 +115,8 @@ public class EmailService : IEmailService
         string bannerColor,
         string bannerEyebrow,
         string bannerTitle,
-        List<(string Label, string Value)> rows)
+        List<(string Label, string Value)> rows,
+        string? companyName = null)
     {
         var rowsHtml = string.Join("\n", rows.Select((r, i) =>
         {
@@ -139,6 +147,9 @@ public class EmailService : IEmailService
                     <!-- Banner -->
                     <tr>
                       <td style="background:{bannerColor};padding:36px 40px;text-align:center;">
+                        {(!string.IsNullOrWhiteSpace(companyName)
+                            ? $"<div style=\"font-size:0.7rem;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:rgba(255,255,255,0.6);margin-bottom:4px;\">{WebUtility.HtmlEncode(companyName)}</div>"
+                            : "")}
                         <div style="font-size:0.78rem;font-weight:700;letter-spacing:0.18em;
                                     text-transform:uppercase;color:rgba(255,255,255,0.75);
                                     margin-bottom:10px;">{WebUtility.HtmlEncode(bannerEyebrow)}</div>
@@ -161,7 +172,9 @@ public class EmailService : IEmailService
                       <td style="background:#f9fafb;padding:18px 40px;
                                  border-top:1px solid #e5e7eb;text-align:center;">
                         <p style="margin:0;font-size:0.78rem;color:#9ca3af;">
-                          ANDON Incident Management System
+                          {(string.IsNullOrWhiteSpace(companyName)
+                              ? "ANDON Incident Management System"
+                              : $"{WebUtility.HtmlEncode(companyName)} &middot; ANDON Incident Management System")}
                         </p>
                       </td>
                     </tr>

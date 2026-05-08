@@ -8,6 +8,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Optional settings files loaded after appsettings.json so they can override their sections.
 // Environment variables are re-added last so they always win over on-disk files in production.
+builder.Configuration.AddJsonFile("general-settings.json", optional: true, reloadOnChange: true);
 builder.Configuration.AddJsonFile("erp-settings.json", optional: true, reloadOnChange: true);
 builder.Configuration.AddJsonFile("email-settings.json", optional: true, reloadOnChange: true);
 builder.Configuration.AddEnvironmentVariables();
@@ -42,6 +43,9 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddSingleton<LoginAttemptTracker>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IIncidentService, IncidentService>();
+
+// ---- General settings ----
+builder.Services.Configure<GeneralSettings>(builder.Configuration.GetSection("GeneralSettings"));
 
 // ---- ERP integration ----
 builder.Services.Configure<ErpSettings>(builder.Configuration.GetSection("ErpSettings"));

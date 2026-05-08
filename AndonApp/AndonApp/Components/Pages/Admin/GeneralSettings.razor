@@ -1,0 +1,86 @@
+@page "/admin/general-settings"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
+@layout AndonApp.Components.Layout.AdminLayout
+@using Microsoft.Extensions.Options
+@inject IOptionsMonitor<AndonApp.Services.GeneralSettings> GeneralOptions
+@inject IWebHostEnvironment Env
+@rendermode InteractiveServer
+
+<PageTitle>General Settings – Admin</PageTitle>
+
+<div class="admin-page">
+    <div class="page-header">
+        <h1>General Settings</h1>
+    </div>
+
+    <div class="erp-form-card">
+        @if (!string.IsNullOrEmpty(_saveSuccess))
+        {
+            <div class="alert alert-success">@_saveSuccess</div>
+        }
+        @if (!string.IsNullOrEmpty(_saveError))
+        {
+            <div class="alert alert-error">@_saveError</div>
+        }
+
+        <div class="form-group">
+            <label>Company Name</label>
+            <input class="form-control"
+                   @bind="_companyName"
+                   maxlength="100"
+                   placeholder="e.g. Acme Manufacturing" />
+            <small class="help-text">
+                Displayed in the admin nav, login page, and outgoing emails.
+                Leave blank to show the default ANDON branding.
+            </small>
+        </div>
+
+        <div class="erp-actions">
+            <button class="btn btn-primary" @onclick="SaveSettings" disabled="@_saving">
+                @(_saving ? "Saving..." : "Save Settings")
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _companyName = string.Empty;
+    private bool _saving;
+    private string? _saveSuccess;
+    private string? _saveError;
+
+    protected override void OnInitialized()
+    {
+        _companyName = GeneralOptions.CurrentValue.CompanyName;
+    }
+
+    private async Task SaveSettings()
+    {
+        _saving = true;
+        _saveSuccess = null;
+        _saveError = null;
+        try
+        {
+            var payload = new
+            {
+                GeneralSettings = new
+                {
+                    CompanyName = _companyName.Trim()
+                }
+            };
+            var json = System.Text.Json.JsonSerializer.Serialize(payload,
+                new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+            var path = Path.Combine(Env.ContentRootPath, "general-settings.json");
+            await File.WriteAllTextAsync(path, json);
+            _saveSuccess = "Settings saved.";
+        }
+        catch (Exception ex)
+        {
+            _saveError = $"Failed to save: {ex.Message}";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

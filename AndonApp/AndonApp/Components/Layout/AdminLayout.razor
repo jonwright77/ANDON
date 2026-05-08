@@ -1,10 +1,13 @@
 @inherits LayoutComponentBase
+@using AndonApp.Services
 @using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.Extensions.Options
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IOptionsMonitor<GeneralSettings> GeneralOptions
 
 <div class="admin-shell">
     <nav class="admin-nav">
-        <div class="admin-nav-brand">ANDON Admin</div>
+        <div class="admin-nav-brand">@BrandName</div>
         <div class="admin-nav-links">
             <a href="/admin/overview">Overview</a>
             <a href="/admin/andon-codes">ANDON Codes</a>
@@ -16,6 +19,7 @@
                 <a href="/admin/email-settings">Email Settings</a>
                 <a href="/admin/erp-settings">ERP Settings</a>
                 <a href="/admin/users">Users</a>
+                <a href="/admin/general-settings">Settings</a>
             }
             <button class="theme-toggle" onclick="andonTheme.toggle()" title="Toggle dark mode"></button>
             <form method="post" action="/admin/logout" @formname="logout-form" style="display:inline">
@@ -31,6 +35,15 @@
 
 @code {
     private bool _isAdmin;
+
+    private string BrandName
+    {
+        get
+        {
+            var company = GeneralOptions.CurrentValue.CompanyName;
+            return string.IsNullOrWhiteSpace(company) ? "ANDON Admin" : $"{company} · ANDON";
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {

@@ -653,6 +653,58 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
 .table-group-header:hover td { background: var(--gray-100) !important; }
 
 .url-cell { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+
+/* Icon-only action buttons */
+.action-btns {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--gray-700);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  flex-shrink: 0;
+}
+.btn-icon svg { display: block; pointer-events: none; }
+.btn-icon:hover {
+  background: var(--gray-100);
+  color: var(--gray-900);
+  border-color: var(--gray-400);
+}
+
+.btn-icon-primary {
+  background: #1976d2;
+  border-color: transparent;
+  color: #fff;
+}
+.btn-icon-primary:hover {
+  background: #1256a0;
+  color: #fff;
+  border-color: transparent;
+}
+
+.btn-icon-danger {
+  background: var(--bg-red);
+  border-color: transparent;
+  color: #fff;
+}
+.btn-icon-danger:hover {
+  background: var(--red);
+  color: #fff;
+  border-color: transparent;
+}
 .url-text { font-size: 0.78rem; color: var(--gray-700); max-width: 380px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ============================================================
