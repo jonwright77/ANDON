@@ -1,0 +1,261 @@
+@page "/admin/andon-history"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "ManagerOrAdmin")]
+@layout AndonApp.Components.Layout.AdminLayout
+@using AndonApp.Data
+@using AndonApp.Data.Models
+@using ClosedXML.Excel
+@using Microsoft.JSInterop
+@inject IDbContextFactory<AndonDbContext> DbFactory
+@inject IJSRuntime JS
+@rendermode InteractiveServer
+
+<PageTitle>ANDON History</PageTitle>
+
+<div class="admin-page">
+    <div class="page-header">
+        <h1>ANDON History</h1>
+    </div>
+
+    <div class="history-filter">
+        <div class="history-filter-fields">
+            <div class="form-group">
+                <label>From</label>
+                <input type="date" class="form-control"
+                       value="@_fromStr"
+                       max="@_todayStr"
+                       @onchange="e => _fromStr = e.Value?.ToString() ?? _fromStr" />
+            </div>
+            <div class="form-group">
+                <label>To</label>
+                <input type="date" class="form-control"
+                       value="@_toStr"
+                       max="@_todayStr"
+                       @onchange="e => _toStr = e.Value?.ToString() ?? _toStr" />
+            </div>
+            <div class="history-filter-actions">
+                <button class="btn btn-primary" @onclick="SearchAsync" disabled="@_loading">
+                    @(_loading ? "Searching..." : "Search")
+                </button>
+                @if (_incidents != null && _incidents.Any())
+                {
+                    <button class="btn btn-secondary" @onclick="ExportExcelAsync" disabled="@_exporting">
+                        @if (_exporting)
+                        {
+                            <span>Exporting...</span>
+                        }
+                        else
+                        {
+                            <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="none"
+                                 viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="margin-right:0.35rem;vertical-align:-2px">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                      d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                            </svg>
+                            <span>Export to Excel</span>
+                        }
+                    </button>
+                }
+            </div>
+        </div>
+        @if (_incidents != null)
+        {
+            <div class="history-result-count">
+                @_incidents.Count incident@(_incidents.Count == 1 ? "" : "s") found
+            </div>
+        }
+    </div>
+
+    @if (_loading)
+    {
+        <p style="padding:2rem">Loading...</p>
+    }
+    else if (_incidents != null && !_incidents.Any())
+    {
+        <p class="empty-state">No incidents found in the selected date range.</p>
+    }
+    else if (_incidents != null)
+    {
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Opened</th>
+                        <th>Production Line</th>
+                        <th>Type</th>
+                        <th>Severity</th>
+                        <th>ANDON Code</th>
+                        <th>Additional Info</th>
+                        <th>Status</th>
+                        <th>Closed</th>
+                        <th>Duration</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in _incidents)
+                    {
+                        var openedLocal = i.CreatedAt.ToLocalTime();
+                        var closedLocal = i.ClosedAt?.ToLocalTime();
+                        var duration = closedLocal.HasValue
+                            ? FormatDuration(closedLocal.Value - openedLocal)
+                            : "Ongoing";
+
+                        <tr>
+                            <td class="text-nowrap">@openedLocal.ToString("dd MMM yyyy HH:mm")</td>
+                            <td><strong>@i.ProductionLine.Name</strong></td>
+                            <td>
+                                @if (i.ProductionLine.LineType != null)
+                                {
+                                    <span class="badge badge-blue">@i.ProductionLine.LineType.Name</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted">—</span>
+                                }
+                            </td>
+                            <td>
+                                <span class="badge @(i.Severity == Severity.RED ? "badge-red" : "badge-amber")">
+                                    @i.Severity
+                                </span>
+                            </td>
+                            <td><strong>@i.AndonCode.Code</strong> @i.AndonCode.Name</td>
+                            <td>@(i.AdditionalInfo ?? "–")</td>
+                            <td>
+                                <span class="badge @(i.Status == IncidentStatus.OPEN ? "badge-red" : "badge-green")">
+                                    @i.Status
+                                </span>
+                            </td>
+                            <td class="text-nowrap">@(closedLocal.HasValue ? closedLocal.Value.ToString("dd MMM yyyy HH:mm") : "–")</td>
+                            <td class="text-nowrap">@duration</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private string _todayStr = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
+    private string _fromStr = DateOnly.FromDateTime(DateTime.Today.AddDays(-7)).ToString("yyyy-MM-dd");
+    private string _toStr   = DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd");
+
+    private List<Incident>? _incidents;
+    private bool _loading;
+    private bool _exporting;
+
+    private DateOnly From => DateOnly.TryParse(_fromStr, out var d) ? d : DateOnly.FromDateTime(DateTime.Today.AddDays(-7));
+    private DateOnly To   => DateOnly.TryParse(_toStr,   out var d) ? d : DateOnly.FromDateTime(DateTime.Today);
+
+    protected override async Task OnInitializedAsync() => await SearchAsync();
+
+    private async Task SearchAsync()
+    {
+        _loading = true;
+        try
+        {
+            var fromUtc = From.ToDateTime(TimeOnly.MinValue);
+            var toUtc   = To.ToDateTime(TimeOnly.MaxValue);
+
+            await using var db = await DbFactory.CreateDbContextAsync();
+            _incidents = await db.Incidents
+                .Include(i => i.ProductionLine).ThenInclude(l => l.LineType)
+                .Include(i => i.AndonCode)
+                .Where(i => i.CreatedAt >= fromUtc && i.CreatedAt <= toUtc)
+                .OrderBy(i => i.CreatedAt)
+                .ToListAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ExportExcelAsync()
+    {
+        if (_incidents == null || !_incidents.Any()) return;
+        _exporting = true;
+        try
+        {
+            var bytes = BuildExcel();
+            var filename = $"ANDON-History-{From:yyyyMMdd}-to-{To:yyyyMMdd}.xlsx";
+            await JS.InvokeVoidAsync("downloadFile",
+                filename,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                bytes);
+        }
+        finally
+        {
+            _exporting = false;
+        }
+    }
+
+    private byte[] BuildExcel()
+    {
+        using var wb = new XLWorkbook();
+        var ws = wb.Worksheets.Add("ANDON History");
+
+        // Header row
+        var headers = new[]
+        {
+            "Opened", "Production Line", "Type", "Severity",
+            "ANDON Code", "Additional Info", "Status", "Closed", "Duration"
+        };
+        for (int col = 1; col <= headers.Length; col++)
+        {
+            var cell = ws.Cell(1, col);
+            cell.Value = headers[col - 1];
+            cell.Style.Font.Bold = true;
+            cell.Style.Fill.BackgroundColor = XLColor.FromHtml("#1e3a5f");
+            cell.Style.Font.FontColor = XLColor.White;
+        }
+
+        // Data rows
+        int row = 2;
+        foreach (var i in _incidents!)
+        {
+            var openedLocal  = i.CreatedAt.ToLocalTime();
+            var closedLocal  = i.ClosedAt?.ToLocalTime();
+            var duration     = closedLocal.HasValue ? FormatDuration(closedLocal.Value - openedLocal) : "Ongoing";
+            var severityFill = i.Severity == Severity.RED
+                ? XLColor.FromHtml("#fecaca")
+                : XLColor.FromHtml("#fde68a");
+
+            ws.Cell(row, 1).Value = openedLocal.ToString("dd MMM yyyy HH:mm");
+            ws.Cell(row, 2).Value = i.ProductionLine.Name;
+            ws.Cell(row, 3).Value = i.ProductionLine.LineType?.Name ?? "–";
+
+            var sevCell = ws.Cell(row, 4);
+            sevCell.Value = i.Severity.ToString();
+            sevCell.Style.Fill.BackgroundColor = severityFill;
+            sevCell.Style.Font.Bold = true;
+
+            ws.Cell(row, 5).Value = $"{i.AndonCode.Code} – {i.AndonCode.Name}";
+            ws.Cell(row, 6).Value = i.AdditionalInfo ?? "–";
+            ws.Cell(row, 7).Value = i.Status.ToString();
+            ws.Cell(row, 8).Value = closedLocal.HasValue ? closedLocal.Value.ToString("dd MMM yyyy HH:mm") : "–";
+            ws.Cell(row, 9).Value = duration;
+
+            // Alternate row shading
+            if (row % 2 == 0)
+            {
+                ws.Row(row).Style.Fill.BackgroundColor = XLColor.FromHtml("#f8fafc");
+            }
+
+            row++;
+        }
+
+        // Autofilter + freeze header
+        ws.RangeUsed()!.SetAutoFilter();
+        ws.SheetView.FreezeRows(1);
+        ws.Columns().AdjustToContents();
+
+        using var ms = new MemoryStream();
+        wb.SaveAs(ms);
+        return ms.ToArray();
+    }
+
+    private static string FormatDuration(TimeSpan d)
+    {
+        if (d.TotalHours >= 1) return $"{(int)d.TotalHours}h {d.Minutes:D2}m";
+        return $"{d.Minutes}m {d.Seconds:D2}s";
+    }
+}
