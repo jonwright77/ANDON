@@ -20,13 +20,6 @@
             <h1>Day Review – @_line?.Name</h1>
         </div>
         <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
-            @if (ErpHistoryAvailable)
-            {
-                <button class="btn btn-secondary btn-sm" @onclick="LoadBuildDataAsync"
-                        disabled="@_loadingBuild">
-                    @(_loadingBuild ? "Loading..." : _buildPoints.Any() ? "↻ Refresh Build Data" : "Load ERP Build Data")
-                </button>
-            }
             <div class="review-date-picker">
                 <label>Date</label>
                 <input type="date"
@@ -302,6 +295,7 @@
         _line = await db.ProductionLines.FindAsync(Id);
         if (_line == null) { Nav.NavigateTo("/admin/lines"); return; }
         await LoadDataAsync();
+        await LoadBuildDataAsync();
     }
 
     private async Task OnDateChanged(ChangeEventArgs e)
@@ -310,9 +304,10 @@
         {
             _selectedDate = date;
             _selectedDateStr = date.ToString("yyyy-MM-dd");
-            _buildPoints = new();   // clear stale build data when date changes
+            _buildPoints = new();
             _buildError = null;
             await LoadDataAsync();
+            await LoadBuildDataAsync();
         }
     }
 
