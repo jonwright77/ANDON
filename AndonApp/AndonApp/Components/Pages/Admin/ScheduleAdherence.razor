@@ -24,16 +24,32 @@
             <span class="adh-week-label">@WeekLabel</span>
             <button class="btn btn-secondary btn-sm" @onclick="NextWeek">Next &#8594;</button>
         </div>
-        <div class="adh-type-filter">
-            <label>Production Type</label>
-            <select class="form-control" @onchange="OnTypeChanged">
-                <option value="">All Types</option>
-                @foreach (var lt in _lineTypes)
+
+        @if (_allTypes.Any() || _hasUntypedLines)
+        {
+            <div class="adh-type-chips">
+                <span class="adh-chips-label">Show:</span>
+                @foreach (var lt in _allTypes)
                 {
-                    <option value="@lt.Id" selected="@(_selectedTypeId == lt.Id)">@lt.Name</option>
+                    var isChecked = _selectedTypeIds.Contains(lt.Id);
+                    <label class="overview-filter-chip @(isChecked ? "active" : "")">
+                        <input type="checkbox" checked="@isChecked"
+                               @onchange="e => ToggleType(lt.Id, (bool)e.Value!)" />
+                        @lt.Name
+                    </label>
                 }
-            </select>
-        </div>
+                @if (_hasUntypedLines)
+                {
+                    <label class="overview-filter-chip @(_showUntyped ? "active" : "")">
+                        <input type="checkbox" checked="@_showUntyped"
+                               @onchange="e => _showUntyped = (bool)e.Value!" />
+                        Untyped
+                    </label>
+                }
+                <button class="btn btn-sm btn-secondary" @onclick="SelectAll">All</button>
+                <button class="btn btn-sm btn-secondary" @onclick="ClearAll">None</button>
+            </div>
+        }
     </div>
 
     @if (!_erpHistoryAvailable)
@@ -48,107 +64,102 @@
     {
         <p>Loading...</p>
     }
-    else if (!_lines.Any())
-    {
-        <p class="empty-state">No active production lines match the selected filter.</p>
-    }
     else
     {
-        <div class="table-scroll">
-            <table class="adh-table">
-                <thead>
-                    <tr>
-                        <th class="adh-line-col">Production Line</th>
-                        @foreach (var day in WeekDays)
-                        {
-                            <th class="adh-day-col @(day == Today ? "adh-day-today" : "")">
-                                <span class="adh-day-name">@day.ToString("ddd")</span>
-                                <span class="adh-day-date">@day.ToString("dd MMM")</span>
-                            </th>
-                        }
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var line in _lines)
-                    {
+        var groups = VisibleGroups.ToList();
+        @if (!groups.Any())
+        {
+            <p class="empty-state">No active production lines match the selected filter.</p>
+        }
+        else
+        {
+            <div class="table-scroll">
+                <table class="adh-table">
+                    <thead>
                         <tr>
-                            <td class="adh-line-name-cell">
-                                <strong>@line.Name</strong>
-                                @if (line.LineType != null)
-                                {
-                                    <span class="badge badge-blue adh-type-badge">@line.LineType.Name</span>
-                                }
-                            </td>
+                            <th class="adh-line-col">Production Line</th>
                             @foreach (var day in WeekDays)
                             {
-                                var target = GetTarget(line.Id, day);
-                                var showErp = _erpHistoryAvailable && line.Pool != null;
-                                var built   = showErp ? GetBuilt(line.Pool!, day) : null;
-                                var pct     = CalcPct(target, built);
-
-                                <td class="adh-cell @GetCellBgClass(pct, target)">
-                                    @if (target.HasValue)
-                                    {
-                                        <div class="adh-cell-row">
-                                            <span class="adh-cell-label">Target</span>
-                                            <span class="adh-cell-value">@target.Value.ToString("N0")</span>
-                                        </div>
-                                    }
-                                    @if (showErp)
-                                    {
-                                        <div class="adh-cell-row">
-                                            <span class="adh-cell-label">Built</span>
-                                            <span class="adh-cell-value">@(built.HasValue ? built.Value.ToString("N0") : "–")</span>
-                                        </div>
-                                        @if (pct.HasValue)
-                                        {
-                                            <div class="adh-pct-pill @GetPctClass(pct.Value)">@pct.Value.ToString("F0")%</div>
-                                        }
-                                        else if (target.HasValue)
-                                        {
-                                            <div class="adh-pct-pill adh-pct-none">–</div>
-                                        }
-                                        else
-                                        {
-                                            <span class="adh-no-data">—</span>
-                                        }
-                                    }
-                                    else if (!target.HasValue)
-                                    {
-                                        <span class="adh-no-data">—</span>
-                                    }
-                                </td>
+                                <th class="adh-day-col @(day == Today ? "adh-day-today" : "")">
+                                    <span class="adh-day-name">@day.ToString("ddd")</span>
+                                    <span class="adh-day-date">@day.ToString("dd MMM")</span>
+                                </th>
                             }
+                            <th class="adh-week-col">Week</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
+                    </thead>
+                    <tbody>
+                        @foreach (var group in groups)
+                        {
+                            <tr class="adh-group-header">
+                                <td colspan="9">@(group.TypeName ?? "Untyped")</td>
+                            </tr>
 
-        <div class="adh-legend">
-            <span class="adh-legend-label">Key:</span>
-            <span class="adh-legend-item">
-                <span class="adh-pct-pill adh-pct-green">&#8805; 100%</span>
-                On / above target
-            </span>
-            <span class="adh-legend-item">
-                <span class="adh-pct-pill adh-pct-amber">80–99%</span>
-                Slightly below
-            </span>
-            <span class="adh-legend-item">
-                <span class="adh-pct-pill adh-pct-red">&lt; 80%</span>
-                Significantly below
-            </span>
-        </div>
+                            @foreach (var line in group.Lines)
+                            {
+                                var showErpLine = _erpHistoryAvailable && line.Pool != null;
+                                <tr>
+                                    <td class="adh-line-name-cell"><strong>@line.Name</strong></td>
+
+                                    @foreach (var day in WeekDays)
+                                    {
+                                        var t = GetTarget(line.Id, day);
+                                        var b = showErpLine ? GetBuilt(line.Pool!, day) : null;
+                                        var p = CalcPct(t, b);
+                                        <td class="adh-cell @GetCellBg(p, t)">
+                                            @RenderCell(t, b, p, showErpLine)
+                                        </td>
+                                    }
+
+                                    @{ var wt = LineWeekTarget(line); var wb = LineWeekBuilt(line); var wp = CalcPct(wt, wb); }
+                                    <td class="adh-cell adh-week-cell @GetCellBg(wp, wt)">
+                                        @RenderCell(wt, wb, wp, showErpLine)
+                                    </td>
+                                </tr>
+                            }
+
+                            <tr class="adh-totals-row">
+                                <td class="adh-totals-label">@(group.TypeName ?? "Untyped") Total</td>
+
+                                @foreach (var day in WeekDays)
+                                {
+                                    var dt = DayTargetTotal(group.Lines, day);
+                                    var db = DayBuiltTotal(group.Lines, day);
+                                    var dp = CalcPct(dt, db);
+                                    <td class="adh-cell adh-totals-cell @GetCellBg(dp, dt)">
+                                        @RenderCell(dt, db, dp, _erpHistoryAvailable)
+                                    </td>
+                                }
+
+                                @{ var gwt = WeekTargetTotal(group.Lines); var gwb = WeekBuiltTotal(group.Lines); var gwp = CalcPct(gwt, gwb); }
+                                <td class="adh-cell adh-week-cell adh-totals-cell @GetCellBg(gwp, gwt)">
+                                    @RenderCell(gwt, gwb, gwp, _erpHistoryAvailable)
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="adh-legend">
+                <span class="adh-legend-label">Key:</span>
+                <span class="adh-legend-item"><span class="adh-pct-pill adh-pct-green">&#8805; 100%</span> On / above target</span>
+                <span class="adh-legend-item"><span class="adh-pct-pill adh-pct-amber">80–99%</span> Slightly below</span>
+                <span class="adh-legend-item"><span class="adh-pct-pill adh-pct-red">&lt; 80%</span> Significantly below</span>
+            </div>
+        }
     }
 </div>
 
 @code {
     private DateOnly _weekStart = GetWeekMonday(DateOnly.FromDateTime(DateTime.Today));
-    private int? _selectedTypeId;
 
-    private List<ProductionLine> _lines = new();
-    private List<LineType> _lineTypes = new();
+    private List<ProductionLine> _allLines = new();
+    private List<LineType> _allTypes = new();
+    private HashSet<int> _selectedTypeIds = new();
+    private bool _showUntyped = true;
+    private bool _hasUntypedLines;
+
     private Dictionary<(int LineId, DateOnly Date), int> _targets = new();
     private Dictionary<(string Pool, DateOnly Date), int> _builtByPoolDate = new();
     private bool _loading = true;
@@ -162,35 +173,37 @@
         get
         {
             var end = _weekStart.AddDays(6);
-            var weekNum = ISOWeek.GetWeekOfYear(_weekStart.ToDateTime(TimeOnly.MinValue));
-            return $"{_weekStart:dd MMM} – {end:dd MMM yyyy}  (Week {weekNum})";
+            var wk = ISOWeek.GetWeekOfYear(_weekStart.ToDateTime(TimeOnly.MinValue));
+            return $"{_weekStart:dd MMM} – {end:dd MMM yyyy}  (Week {wk})";
         }
     }
+
+    private IEnumerable<LineGroup> VisibleGroups =>
+        _allLines
+            .Where(l => l.LineTypeId == null ? _showUntyped : _selectedTypeIds.Contains(l.LineTypeId.Value))
+            .GroupBy(l => new { l.LineTypeId, TypeName = l.LineType?.Name })
+            .OrderBy(g => g.Key.TypeName == null ? "￿" : g.Key.TypeName)
+            .Select(g => new LineGroup
+            {
+                TypeId   = g.Key.LineTypeId,
+                TypeName = g.Key.TypeName,
+                Lines    = g.OrderBy(l => l.Name).ToList()
+            });
 
     protected override async Task OnInitializedAsync()
     {
         await using var db = await DbFactory.CreateDbContextAsync();
-        _lineTypes = await db.LineTypes.OrderBy(t => t.Name).ToListAsync();
+        _allTypes = await db.LineTypes.OrderBy(t => t.Name).ToListAsync();
+        _selectedTypeIds = _allTypes.Select(t => t.Id).ToHashSet();
         await LoadAsync();
     }
 
-    private async Task PrevWeek()
-    {
-        _weekStart = _weekStart.AddDays(-7);
-        await LoadAsync();
-    }
+    private async Task PrevWeek() { _weekStart = _weekStart.AddDays(-7); await LoadAsync(); }
+    private async Task NextWeek() { _weekStart = _weekStart.AddDays(7);  await LoadAsync(); }
 
-    private async Task NextWeek()
-    {
-        _weekStart = _weekStart.AddDays(7);
-        await LoadAsync();
-    }
-
-    private async Task OnTypeChanged(ChangeEventArgs e)
-    {
-        _selectedTypeId = int.TryParse(e.Value?.ToString(), out var id) ? id : (int?)null;
-        await LoadAsync();
-    }
+    private void ToggleType(int id, bool on) { if (on) _selectedTypeIds.Add(id); else _selectedTypeIds.Remove(id); }
+    private void SelectAll() { _selectedTypeIds = _allTypes.Select(t => t.Id).ToHashSet(); _showUntyped = true; }
+    private void ClearAll()  { _selectedTypeIds.Clear(); _showUntyped = false; }
 
     private async Task LoadAsync()
     {
@@ -205,16 +218,15 @@
 
         await using var db = await DbFactory.CreateDbContextAsync();
 
-        var linesQuery = db.ProductionLines
+        _allLines = await db.ProductionLines
             .Include(l => l.LineType)
-            .Where(l => l.IsActive);
+            .Where(l => l.IsActive)
+            .OrderBy(l => l.Name)
+            .ToListAsync();
 
-        if (_selectedTypeId.HasValue)
-            linesQuery = linesQuery.Where(l => l.LineTypeId == _selectedTypeId.Value);
+        _hasUntypedLines = _allLines.Any(l => l.LineTypeId == null);
 
-        _lines = await linesQuery.OrderBy(l => l.Name).ToListAsync();
-
-        var lineIds = _lines.Select(l => l.Id).ToList();
+        var lineIds = _allLines.Select(l => l.Id).ToList();
 
         var targetList = await db.LineTargets
             .Where(t => lineIds.Contains(t.ProductionLineId)
@@ -234,20 +246,19 @@
                     .GroupBy(p => (p.Pool, DateOnly.FromDateTime(p.Timestamp.ToLocalTime())))
                     .ToDictionary(g => g.Key, g => g.Sum(p => p.Quantity));
             }
-            catch
-            {
-                // ERP failure silently — table shows "–" for built
-            }
+            catch { /* silently degrade — cells show "–" */ }
         }
 
         _loading = false;
     }
 
+    // ---- Data helpers ----
+
     private int? GetTarget(int lineId, DateOnly date)
-        => _targets.TryGetValue((lineId, date), out var t) ? t : (int?)null;
+        => _targets.TryGetValue((lineId, date), out var t) ? t : null;
 
     private int? GetBuilt(string pool, DateOnly date)
-        => _builtByPoolDate.TryGetValue((pool, date), out var b) ? b : (int?)null;
+        => _builtByPoolDate.TryGetValue((pool, date), out var b) ? b : null;
 
     private static double? CalcPct(int? target, int? built)
     {
@@ -255,10 +266,53 @@
         return (double)built.Value / target.Value * 100.0;
     }
 
-    private static string GetCellBgClass(double? pct, int? target)
+    // ---- Aggregation helpers ----
+
+    private int? LineWeekTarget(ProductionLine line)
+    {
+        var vals = WeekDays.Select(d => GetTarget(line.Id, d)).Where(v => v.HasValue).Select(v => v!.Value).ToList();
+        return vals.Count > 0 ? vals.Sum() : null;
+    }
+
+    private int? LineWeekBuilt(ProductionLine line)
+    {
+        if (!_erpHistoryAvailable || line.Pool == null) return null;
+        var vals = WeekDays.Select(d => GetBuilt(line.Pool, d)).Where(v => v.HasValue).Select(v => v!.Value).ToList();
+        return vals.Count > 0 ? vals.Sum() : null;
+    }
+
+    private int? DayTargetTotal(IList<ProductionLine> lines, DateOnly day)
+    {
+        var vals = lines.Select(l => GetTarget(l.Id, day)).Where(v => v.HasValue).Select(v => v!.Value).ToList();
+        return vals.Count > 0 ? vals.Sum() : null;
+    }
+
+    private int? DayBuiltTotal(IList<ProductionLine> lines, DateOnly day)
+    {
+        if (!_erpHistoryAvailable) return null;
+        var vals = lines.Where(l => l.Pool != null).Select(l => GetBuilt(l.Pool!, day)).Where(v => v.HasValue).Select(v => v!.Value).ToList();
+        return vals.Count > 0 ? vals.Sum() : null;
+    }
+
+    private int? WeekTargetTotal(IList<ProductionLine> lines)
+    {
+        var vals = WeekDays.SelectMany(d => lines.Select(l => GetTarget(l.Id, d))).Where(v => v.HasValue).Select(v => v!.Value).ToList();
+        return vals.Count > 0 ? vals.Sum() : null;
+    }
+
+    private int? WeekBuiltTotal(IList<ProductionLine> lines)
+    {
+        if (!_erpHistoryAvailable) return null;
+        var vals = WeekDays.SelectMany(d => lines.Where(l => l.Pool != null).Select(l => GetBuilt(l.Pool!, d))).Where(v => v.HasValue).Select(v => v!.Value).ToList();
+        return vals.Count > 0 ? vals.Sum() : null;
+    }
+
+    // ---- CSS helpers ----
+
+    private static string GetCellBg(double? pct, int? target)
     {
         if (!target.HasValue) return "adh-cell-notarget";
-        if (!pct.HasValue) return "";
+        if (!pct.HasValue)    return "";
         if (pct.Value >= 100) return "adh-cell-bg-green";
         if (pct.Value >= 80)  return "adh-cell-bg-amber";
         return "adh-cell-bg-red";
@@ -271,10 +325,57 @@
         return "adh-pct-red";
     }
 
+    // ---- Render fragment ----
+
+    private RenderFragment RenderCell(int? target, int? built, double? pct, bool showErp) => __builder =>
+    {
+        int seq = 0;
+        if (target.HasValue)
+        {
+            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "adh-cell-row");
+            __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "adh-cell-label"); __builder.AddContent(seq++, "Target"); __builder.CloseElement();
+            __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "adh-cell-value"); __builder.AddContent(seq++, target.Value.ToString("N0")); __builder.CloseElement();
+            __builder.CloseElement();
+        }
+        if (showErp)
+        {
+            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "adh-cell-row");
+            __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "adh-cell-label"); __builder.AddContent(seq++, "Built"); __builder.CloseElement();
+            __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "adh-cell-value"); __builder.AddContent(seq++, built.HasValue ? built.Value.ToString("N0") : "–"); __builder.CloseElement();
+            __builder.CloseElement();
+
+            if (pct.HasValue)
+            {
+                __builder.OpenElement(seq++, "div");
+                __builder.AddAttribute(seq++, "class", $"adh-pct-pill {GetPctClass(pct.Value)}");
+                __builder.AddContent(seq++, $"{pct.Value:F0}%");
+                __builder.CloseElement();
+            }
+            else if (target.HasValue)
+            {
+                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "adh-pct-pill adh-pct-none"); __builder.AddContent(seq++, "–"); __builder.CloseElement();
+            }
+            else
+            {
+                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "adh-no-data"); __builder.AddContent(seq++, "—"); __builder.CloseElement();
+            }
+        }
+        else if (!target.HasValue)
+        {
+            __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "adh-no-data"); __builder.AddContent(seq++, "—"); __builder.CloseElement();
+        }
+    };
+
     private static DateOnly GetWeekMonday(DateOnly date)
     {
         var dow = (int)date.DayOfWeek;
-        var daysBack = dow == 0 ? 6 : dow - 1;
-        return date.AddDays(-daysBack);
+        return date.AddDays(dow == 0 ? -6 : -(dow - 1));
+    }
+
+    private class LineGroup
+    {
+        public int? TypeId   { get; set; }
+        public string? TypeName { get; set; }
+        public List<ProductionLine> Lines { get; set; } = new();
     }
 }

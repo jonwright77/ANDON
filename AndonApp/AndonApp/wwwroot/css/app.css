@@ -1933,23 +1933,18 @@ html.dark .theme-toggle::before { content: '☀'; }
   color: var(--gray-900);
 }
 
-.adh-type-filter {
+.adh-type-chips {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
+  flex-wrap: wrap;
 }
 
-.adh-type-filter label {
-  font-size: 0.82rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+.adh-chips-label {
+  font-size: 0.8rem;
+  font-weight: 600;
   color: var(--text-secondary);
   white-space: nowrap;
-}
-
-.adh-type-filter .form-control {
-  width: 180px;
 }
 
 /* Table */
@@ -2091,6 +2086,58 @@ html.dark .theme-toggle::before { content: '☀'; }
 .adh-pct-red   { background: #fee2e2; color: #b91c1c; }
 .adh-pct-none  { background: var(--gray-100); color: var(--gray-400); }
 
+/* Week total column */
+.adh-week-col {
+  background: var(--gray-100);
+  padding: 0.55rem 0.6rem;
+  text-align: center;
+  border-bottom: 2px solid var(--gray-200);
+  border-left: 2px solid var(--gray-400);
+  min-width: 110px;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--gray-700);
+}
+
+.adh-week-cell {
+  border-left: 2px solid var(--gray-300) !important;
+  background: var(--gray-50);
+}
+
+/* Group header rows */
+.adh-group-header td {
+  background: var(--gray-900);
+  color: rgba(255,255,255,0.85);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0.45rem 1rem;
+}
+
+/* Type totals row */
+.adh-totals-row td {
+  background: var(--gray-100);
+  border-top: 2px solid var(--gray-300);
+  border-bottom: 2px solid var(--gray-300);
+}
+
+.adh-totals-label {
+  padding: 0.75rem 1rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--gray-700);
+  vertical-align: middle;
+}
+
+.adh-totals-cell {
+  background: var(--gray-50) !important;
+}
+
 /* Legend */
 .adh-legend {
   display: flex;
@@ -2133,6 +2180,12 @@ html.dark .admin-shell .adh-pct-amber { background: #451a03; color: #fde68a; }
 html.dark .admin-shell .adh-pct-red   { background: #7f1d1d; color: #fca5a5; }
 html.dark .admin-shell .adh-week-label { color: #f1f5f9; }
 html.dark .admin-shell .adh-controls { background: var(--surface); }
+html.dark .admin-shell .adh-week-col { background: var(--gray-100); border-color: var(--gray-400); }
+html.dark .admin-shell .adh-week-cell { background: #0f172a; border-color: var(--gray-400) !important; }
+html.dark .admin-shell .adh-group-header td { background: #0d1117; color: rgba(255,255,255,0.7); }
+html.dark .admin-shell .adh-totals-row td { background: #1e293b; border-color: var(--border); }
+html.dark .admin-shell .adh-totals-cell { background: #0f172a !important; }
+html.dark .admin-shell .adh-totals-label { color: var(--gray-700); }
 
 /* ============================================================
    RESPONSIVE
