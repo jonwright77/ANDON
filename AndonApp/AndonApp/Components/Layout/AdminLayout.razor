@@ -1,4 +1,6 @@
 @inherits LayoutComponentBase
+@using Microsoft.AspNetCore.Components.Authorization
+@inject AuthenticationStateProvider AuthStateProvider
 
 <div class="admin-shell">
     <nav class="admin-nav">
@@ -9,8 +11,12 @@
             <a href="/admin/lines">Production Lines</a>
             <a href="/admin/line-types">Line Types</a>
             <a href="/admin/todays-targets">Today's Targets</a>
-            <a href="/admin/email-settings">Email Settings</a>
-            <a href="/admin/erp-settings">ERP Settings</a>
+            @if (_isAdmin)
+            {
+                <a href="/admin/email-settings">Email Settings</a>
+                <a href="/admin/erp-settings">ERP Settings</a>
+                <a href="/admin/users">Users</a>
+            }
             <button class="theme-toggle" onclick="andonTheme.toggle()" title="Toggle dark mode"></button>
             <form method="post" action="/admin/logout" @formname="logout-form" style="display:inline">
                 <AntiforgeryToken />
@@ -22,3 +28,13 @@
         @Body
     </main>
 </div>
+
+@code {
+    private bool _isAdmin;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        _isAdmin = state.User.IsInRole("Admin");
+    }
+}

@@ -1,5 +1,5 @@
 @page "/admin/lines/{Id:int}/schedule"
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "ManagerOrAdmin")]
 @layout AndonApp.Components.Layout.AdminLayout
 @inject IDbContextFactory<AndonDbContext> DbFactory
 @inject NavigationManager Nav

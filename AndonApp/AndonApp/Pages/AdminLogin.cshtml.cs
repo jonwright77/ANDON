@@ -68,7 +68,7 @@ public class AdminLoginModel : PageModel
         var claims = new List<Claim>
         {
             new(ClaimTypes.Name, user.Username),
-            new(ClaimTypes.Role, "Admin")
+            new(ClaimTypes.Role, user.Role)
         };
 
         var identity = new ClaimsIdentity(claims, CookieAuthenticationDefaults.AuthenticationScheme);

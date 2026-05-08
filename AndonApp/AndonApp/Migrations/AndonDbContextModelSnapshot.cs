@@ -28,6 +28,7 @@ namespace AndonApp.Migrations
                     .HasColumnType("int");
                 SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
                 b.Property<string>("PasswordHash").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
+                b.Property<string>("Role").IsRequired().HasMaxLength(50).HasColumnType("nvarchar(50)");
                 b.Property<string>("Username").IsRequired().HasMaxLength(100).HasColumnType("nvarchar(100)");
                 b.HasKey("Id");
                 b.ToTable("AdminUsers");

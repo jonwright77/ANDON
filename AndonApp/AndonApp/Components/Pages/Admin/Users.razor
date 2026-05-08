@@ -1,0 +1,259 @@
+@page "/admin/users"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
+@layout AndonApp.Components.Layout.AdminLayout
+@using AndonApp.Data
+@using AndonApp.Data.Models
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IDbContextFactory<AndonDbContext> DbFactory
+@inject AuthenticationStateProvider AuthStateProvider
+@rendermode InteractiveServer
+
+<PageTitle>Users – Admin</PageTitle>
+
+<div class="admin-page">
+    <div class="page-header">
+        <h1>Users</h1>
+        <button class="btn btn-primary" @onclick="OpenAddModal">+ New User</button>
+    </div>
+
+    @if (_users == null)
+    {
+        <p>Loading...</p>
+    }
+    else if (!_users.Any())
+    {
+        <p class="empty-state">No users found.</p>
+    }
+    else
+    {
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Username</th>
+                    <th>Role</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var user in _users)
+                {
+                    <tr>
+                        <td>
+                            <strong>@user.Username</strong>
+                            @if (user.Username == _currentUsername)
+                            {
+                                <span class="badge badge-blue" style="margin-left:0.5rem">You</span>
+                            }
+                        </td>
+                        <td>
+                            <span class="badge @(user.Role == "Admin" ? "badge-blue" : "badge-green")">
+                                @user.Role
+                            </span>
+                        </td>
+                        <td>
+                            @if (user.Username != _currentUsername)
+                            {
+                                <button class="btn btn-sm btn-danger"
+                                        @onclick="() => ConfirmDelete(user)">
+                                    Delete
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</div>
+
+@if (_showAddModal)
+{
+    <div class="modal-backdrop" @onclick="CloseAddModal">
+        <div class="modal" @onclick:stopPropagation>
+            <div class="modal-header">
+                <h2>New User</h2>
+                <button class="modal-close" @onclick="CloseAddModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                @if (!string.IsNullOrEmpty(_addError))
+                {
+                    <div class="alert alert-error">@_addError</div>
+                }
+                <div class="form-group">
+                    <label>Username *</label>
+                    <input class="form-control" @bind="_form.Username" maxlength="100"
+                           placeholder="e.g. jsmith" autocomplete="off" />
+                </div>
+                <div class="form-group">
+                    <label>Password *</label>
+                    <input class="form-control" type="password" @bind="_form.Password"
+                           placeholder="Minimum 8 characters" autocomplete="new-password" />
+                </div>
+                <div class="form-group">
+                    <label>Role *</label>
+                    <select class="form-control" @bind="_form.Role">
+                        <option value="Admin">Admin</option>
+                        <option value="Manager">Manager</option>
+                    </select>
+                    <small class="help-text">
+                        <strong>Admin</strong> — full access including user, email &amp; ERP settings.<br />
+                        <strong>Manager</strong> — access to lines, targets, ANDON codes and overview only.
+                    </small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="CloseAddModal">Cancel</button>
+                <button class="btn btn-primary" @onclick="SaveUser" disabled="@_saving">
+                    @(_saving ? "Saving..." : "Create User")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_deleteTarget != null)
+{
+    <div class="modal-backdrop">
+        <div class="modal modal-sm">
+            <div class="modal-header">
+                <h2>Delete User</h2>
+            </div>
+            <div class="modal-body">
+                <p>Delete user <strong>@_deleteTarget.Username</strong> (@_deleteTarget.Role)?
+                   This cannot be undone.</p>
+                @if (!string.IsNullOrEmpty(_deleteError))
+                {
+                    <div class="alert alert-error">@_deleteError</div>
+                }
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" @onclick="() => _deleteTarget = null">Cancel</button>
+                <button class="btn btn-danger" @onclick="DeleteUser">Delete</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<AdminUser>? _users;
+    private string _currentUsername = string.Empty;
+
+    private bool _showAddModal;
+    private string? _addError;
+    private bool _saving;
+    private UserForm _form = new();
+
+    private AdminUser? _deleteTarget;
+    private string? _deleteError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        _currentUsername = state.User.Identity?.Name ?? string.Empty;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        _users = await db.AdminUsers.OrderBy(u => u.Username).ToListAsync();
+    }
+
+    private void OpenAddModal()
+    {
+        _form = new UserForm();
+        _addError = null;
+        _showAddModal = true;
+    }
+
+    private void CloseAddModal()
+    {
+        _showAddModal = false;
+        _addError = null;
+    }
+
+    private async Task SaveUser()
+    {
+        _addError = null;
+
+        if (string.IsNullOrWhiteSpace(_form.Username))
+        {
+            _addError = "Username is required.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_form.Password) || _form.Password.Length < 8)
+        {
+            _addError = "Password must be at least 8 characters.";
+            return;
+        }
+        if (_form.Role != "Admin" && _form.Role != "Manager")
+        {
+            _addError = "Invalid role.";
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            if (await db.AdminUsers.AnyAsync(u => u.Username == _form.Username.Trim()))
+            {
+                _addError = $"Username '{_form.Username.Trim()}' already exists.";
+                return;
+            }
+
+            db.AdminUsers.Add(new AdminUser
+            {
+                Username = _form.Username.Trim(),
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(_form.Password),
+                Role = _form.Role
+            });
+            await db.SaveChangesAsync();
+            CloseAddModal();
+            await LoadAsync();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void ConfirmDelete(AdminUser user)
+    {
+        _deleteTarget = user;
+        _deleteError = null;
+    }
+
+    private async Task DeleteUser()
+    {
+        if (_deleteTarget == null) return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        // Prevent deleting the last Admin
+        if (_deleteTarget.Role == "Admin")
+        {
+            var adminCount = await db.AdminUsers.CountAsync(u => u.Role == "Admin");
+            if (adminCount <= 1)
+            {
+                _deleteError = "Cannot delete the last Admin account.";
+                return;
+            }
+        }
+
+        var entity = await db.AdminUsers.FindAsync(_deleteTarget.Id);
+        if (entity != null) db.AdminUsers.Remove(entity);
+        await db.SaveChangesAsync();
+
+        _deleteTarget = null;
+        await LoadAsync();
+    }
+
+    private class UserForm
+    {
+        public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string Role { get; set; } = "Manager";
+    }
+}

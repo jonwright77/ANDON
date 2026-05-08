@@ -1,5 +1,5 @@
 @page "/admin/todays-targets"
-@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "AdminOnly")]
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "ManagerOrAdmin")]
 @layout AndonApp.Components.Layout.AdminLayout
 @using AndonApp.Data
 @using AndonApp.Data.Models

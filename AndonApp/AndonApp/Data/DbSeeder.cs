@@ -16,7 +16,8 @@ public static class DbSeeder
             db.AdminUsers.Add(new AdminUser
             {
                 Username = "admin",
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@123")
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword("Admin@123"),
+                Role = "Admin"
             });
         }
 

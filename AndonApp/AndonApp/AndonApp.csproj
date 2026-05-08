@@ -20,8 +20,8 @@
     </PackageReference>
 
     <!-- Email -->
-    <PackageReference Include="MailKit" Version="4.4.0" />
-    <PackageReference Include="MimeKit" Version="4.4.0" />
+    <PackageReference Include="MailKit" Version="4.9.0" />
+    <PackageReference Include="MimeKit" Version="4.9.0" />
 
     <!-- Password hashing -->
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />

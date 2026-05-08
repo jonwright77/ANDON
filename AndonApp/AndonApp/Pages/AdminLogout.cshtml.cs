@@ -5,13 +5,13 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 
 namespace AndonApp.Pages;
 
+[ValidateAntiForgeryToken]
 public class AdminLogoutModel : PageModel
 {
     // GET: visiting the URL directly just redirects to login without signing out.
     // Actual logout requires a POST with a valid antiforgery token.
     public IActionResult OnGet() => Redirect("/admin/login");
 
-    [ValidateAntiForgeryToken]
     public async Task<IActionResult> OnPostAsync()
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
