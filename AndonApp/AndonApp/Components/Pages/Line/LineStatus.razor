@@ -258,7 +258,7 @@ else
 
     // Clock + schedule + target
     private DateTime _now = DateTime.Now;
-    private DayOfWeek _loadedDay;
+    private DateOnly _loadedDate;
     private LineSchedule? _todaySchedule;
     private int? _todayTarget;
     private Timer? _clockTimer;
@@ -310,23 +310,26 @@ else
 
     private void OnClockTick(object? _)
     {
-        _ = InvokeAsync(async () =>
+        _ = InvokeAsync(() =>
         {
             _now = DateTime.Now;
-            if (_now.DayOfWeek != _loadedDay)
-                await LoadScheduleAsync();
+            // Force a full browser reload at midnight so the new day's ERP built
+            // totals, schedule, and targets are all loaded fresh.
+            if (DateOnly.FromDateTime(DateTime.Today) != _loadedDate)
+                Nav.NavigateTo(Nav.Uri, forceLoad: true);
             StateHasChanged();
+            return Task.CompletedTask;
         });
     }
 
     private async Task LoadScheduleAsync()
     {
         if (_line == null) return;
-        _loadedDay = DateTime.Now.DayOfWeek;
+        _loadedDate = DateOnly.FromDateTime(DateTime.Today);
         await using var db = await DbFactory.CreateDbContextAsync();
         _todaySchedule = await db.LineSchedules
             .Include(s => s.Breaks)
-            .FirstOrDefaultAsync(s => s.ProductionLineId == _line.Id && s.DayOfWeek == _loadedDay);
+            .FirstOrDefaultAsync(s => s.ProductionLineId == _line.Id && s.DayOfWeek == _loadedDate.DayOfWeek);
         await LoadTodayTargetAsync();
     }
 
