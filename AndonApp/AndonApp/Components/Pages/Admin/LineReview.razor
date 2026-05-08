@@ -3,8 +3,12 @@
 @layout AndonApp.Components.Layout.AdminLayout
 @using AndonApp.Data
 @using AndonApp.Data.Models
+@using AndonApp.Services
+@using Microsoft.Extensions.Options
 @inject IDbContextFactory<AndonDbContext> DbFactory
 @inject NavigationManager Nav
+@inject IErpDataService ErpDataService
+@inject IOptionsMonitor<ErpSettings> ErpOptions
 @rendermode InteractiveServer
 
 <PageTitle>Review – @(_line?.Name ?? "Line") – Admin</PageTitle>
@@ -15,15 +19,29 @@
             <a href="/admin/lines" class="back-link">&larr; Back to Production Lines</a>
             <h1>Day Review – @_line?.Name</h1>
         </div>
-        <div class="review-date-picker">
-            <label>Date</label>
-            <input type="date"
-                   class="form-control"
-                   value="@_selectedDateStr"
-                   max="@DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd")"
-                   @onchange="OnDateChanged" />
+        <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+            @if (ErpHistoryAvailable)
+            {
+                <button class="btn btn-secondary btn-sm" @onclick="LoadBuildDataAsync"
+                        disabled="@_loadingBuild">
+                    @(_loadingBuild ? "Loading..." : _buildPoints.Any() ? "↻ Refresh Build Data" : "Load ERP Build Data")
+                </button>
+            }
+            <div class="review-date-picker">
+                <label>Date</label>
+                <input type="date"
+                       class="form-control"
+                       value="@_selectedDateStr"
+                       max="@DateOnly.FromDateTime(DateTime.Today).ToString("yyyy-MM-dd")"
+                       @onchange="OnDateChanged" />
+            </div>
         </div>
     </div>
+
+    @if (!string.IsNullOrEmpty(_buildError))
+    {
+        <div class="alert alert-error" style="margin-bottom:1rem">@_buildError</div>
+    }
 
     @if (_loading)
     {
@@ -133,6 +151,41 @@
                     }
                 }
 
+                <!-- ERP Build chart track -->
+                @if (_buildPoints.Any())
+                {
+                    <div class="review-track-row review-build-row">
+                        <div class="review-track-label review-label-build">
+                            <span>ERP Build</span>
+                            <span class="review-build-max">max @_maxBuild.ToString("N0")</span>
+                        </div>
+                        <div class="review-track-area review-build-area">
+                            <div class="review-shift-fill review-shift-fill-muted"></div>
+                            @foreach (var brk in _schedule.Breaks.OrderBy(b => b.StartTime))
+                            {
+                                <div class="review-break-band review-break-band-muted"
+                                     style="left:@ToPercent(brk.StartTime).ToString("F2")%;width:@BandWidth(brk.StartTime,brk.EndTime).ToString("F2")%">
+                                </div>
+                            }
+                            @foreach (var pt in _buildPoints)
+                            {
+                                var barLeft = ToPercent(pt.Timestamp.TimeOfDay);
+                                var barHeight = _maxBuild > 0
+                                    ? Math.Max(2.0, (double)pt.Quantity / _maxBuild * 100)
+                                    : 2.0;
+                                <div class="review-build-bar"
+                                     style="left:@barLeft.ToString("F2")%;height:@barHeight.ToString("F2")%"
+                                     title="@pt.Timestamp.ToLocalTime().ToString("HH:mm") — @pt.Quantity.ToString("N0")">
+                                </div>
+                            }
+                            @if (IsToday)
+                            {
+                                <div class="review-now-line" style="left:@ToPercent(DateTime.Now.TimeOfDay).ToString("F2")%"></div>
+                            }
+                        </div>
+                    </div>
+                }
+
                 <!-- Axis bottom -->
                 <div class="review-axis-row">
                     <div class="review-track-label"></div>
@@ -220,6 +273,16 @@
     private List<Incident> _incidents = new();
     private bool _loading = true;
 
+    private List<ErpBuildPoint> _buildPoints = new();
+    private bool _loadingBuild;
+    private string? _buildError;
+    private int _maxBuild;
+
+    private bool ErpHistoryAvailable =>
+        ErpOptions.CurrentValue.Enabled &&
+        !string.IsNullOrWhiteSpace(ErpOptions.CurrentValue.HistoryQuery) &&
+        !string.IsNullOrEmpty(_line?.Pool);
+
     protected override async Task OnInitializedAsync()
     {
         await using var db = await DbFactory.CreateDbContextAsync();
@@ -234,6 +297,8 @@
         {
             _selectedDate = date;
             _selectedDateStr = date.ToString("yyyy-MM-dd");
+            _buildPoints = new();   // clear stale build data when date changes
+            _buildError = null;
             await LoadDataAsync();
         }
     }
@@ -261,6 +326,34 @@
         _loading = false;
     }
 
+    private async Task LoadBuildDataAsync()
+    {
+        if (_line?.Pool == null) return;
+        _loadingBuild = true;
+        _buildError = null;
+        try
+        {
+            var all = await ErpDataService.FetchBuildHistoryAsync();
+            _buildPoints = all
+                .Where(p => p.Pool.Equals(_line.Pool, StringComparison.OrdinalIgnoreCase)
+                         && DateOnly.FromDateTime(p.Timestamp) == _selectedDate)
+                .OrderBy(p => p.Timestamp)
+                .ToList();
+            _maxBuild = _buildPoints.Any() ? _buildPoints.Max(p => p.Quantity) : 0;
+
+            if (!_buildPoints.Any())
+                _buildError = $"No build data found for pool '{_line.Pool}' on {_selectedDate:dd MMM yyyy}.";
+        }
+        catch (Exception ex)
+        {
+            _buildError = $"Failed to load build data: {ex.Message}";
+        }
+        finally
+        {
+            _loadingBuild = false;
+        }
+    }
+
     private bool IsToday => _selectedDate == DateOnly.FromDateTime(DateTime.Today);
 
     private double ToPercent(TimeSpan t)
@@ -279,11 +372,7 @@
         return (end - start).TotalMinutes / total * 100;
     }
 
-    private double IncidentLeft(TimeSpan startTime)
-    {
-        if (_schedule == null) return 0;
-        return ToPercent(startTime);
-    }
+    private double IncidentLeft(TimeSpan startTime) => ToPercent(startTime);
 
     private double IncidentWidth(TimeSpan startTime, TimeSpan endTime)
     {

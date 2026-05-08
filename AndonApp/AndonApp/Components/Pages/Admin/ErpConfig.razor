@@ -94,7 +94,7 @@
             <button class="btn btn-secondary" @onclick="TestConnection" disabled="@(_testing || _saving)">
                 @(_testing ? "Testing..." : "Test Connection")
             </button>
-            <button class="btn btn-primary" @onclick="SaveSettings" disabled="@(_saving || _testing)">
+            <button class="btn btn-primary" @onclick="SaveSettings" disabled="@(_saving || _testing || _testingHistory)">
                 @(_saving ? "Saving..." : "Save Settings")
             </button>
         </div>
@@ -141,6 +141,81 @@
             }
         </div>
     }
+
+    <!-- ── Historical Build Query ── -->
+    <div class="erp-form-card" style="margin-top:1.5rem">
+        <h3 class="erp-section-heading">Historical Build Query</h3>
+        <p class="help-text" style="margin-bottom:1rem">
+            On-demand query used by the Line Review page to plot build quantities over time.
+            Must return at least three columns: the pool identifier, the quantity, and a date/time.
+            Uses the same connection string, Pool Column, and Quantity Column as above.
+        </p>
+
+        <div class="form-group">
+            <label>History SQL Query</label>
+            <textarea class="form-control form-control-mono"
+                      rows="5"
+                      @bind="_historyQuery"
+                      placeholder="SELECT Pool, Quantity, Timestamp FROM dbo.BuildLog WHERE Date = CAST(GETDATE() AS DATE)"></textarea>
+        </div>
+
+        <div class="erp-columns-row">
+            <div class="form-group">
+                <label>Date/Time Column Name</label>
+                <input class="form-control" @bind="_historyDateColumn" placeholder="Timestamp" maxlength="100" />
+                <small class="help-text">The column containing the date/time of each build record.</small>
+            </div>
+        </div>
+
+        <div class="erp-actions">
+            <button class="btn btn-secondary" @onclick="TestHistoryConnection"
+                    disabled="@(_testingHistory || _saving || _testing)">
+                @(_testingHistory ? "Testing..." : "Test History Query")
+            </button>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(_historyTestError))
+    {
+        <div class="alert alert-error erp-test-result">@_historyTestError</div>
+    }
+
+    @if (_historyTestRows != null)
+    {
+        <div class="erp-test-result">
+            <h3>History Query Result — first @_historyTestRows.Count row(s)</h3>
+            @if (_historyTestRows.Count == 0)
+            {
+                <p>Query returned no rows.</p>
+            }
+            else
+            {
+                <div class="table-scroll">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                @foreach (var col in _historyTestRows[0].Keys)
+                                {
+                                    <th>@col</th>
+                                }
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var row in _historyTestRows)
+                            {
+                                <tr>
+                                    @foreach (var val in row.Values)
+                                    {
+                                        <td>@(val?.ToString() ?? "(null)")</td>
+                                    }
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
 </div>
 
 @code {
@@ -151,6 +226,9 @@
     private string _quantityColumn = "Quantity";
     private int _refreshInterval = 60;
 
+    private string _historyQuery = string.Empty;
+    private string _historyDateColumn = "Timestamp";
+
     private bool _saving;
     private string? _saveError;
     private string? _saveSuccess;
@@ -158,6 +236,10 @@
     private bool _testing;
     private string? _testError;
     private List<Dictionary<string, object?>>? _testRows;
+
+    private bool _testingHistory;
+    private string? _historyTestError;
+    private List<Dictionary<string, object?>>? _historyTestRows;
 
     protected override void OnInitialized()
     {
@@ -168,6 +250,8 @@
         _poolColumn = string.IsNullOrWhiteSpace(s.PoolColumn) ? "Pool" : s.PoolColumn;
         _quantityColumn = string.IsNullOrWhiteSpace(s.QuantityColumn) ? "Quantity" : s.QuantityColumn;
         _refreshInterval = Math.Max(10, s.RefreshIntervalSeconds);
+        _historyQuery = s.HistoryQuery;
+        _historyDateColumn = string.IsNullOrWhiteSpace(s.HistoryDateColumn) ? "Timestamp" : s.HistoryDateColumn;
     }
 
     private async Task SaveSettings()
@@ -187,7 +271,9 @@
                     Query = _query.Trim(),
                     PoolColumn = string.IsNullOrWhiteSpace(_poolColumn) ? "Pool" : _poolColumn.Trim(),
                     QuantityColumn = string.IsNullOrWhiteSpace(_quantityColumn) ? "Quantity" : _quantityColumn.Trim(),
-                    RefreshIntervalSeconds = interval
+                    RefreshIntervalSeconds = interval,
+                    HistoryQuery = _historyQuery.Trim(),
+                    HistoryDateColumn = string.IsNullOrWhiteSpace(_historyDateColumn) ? "Timestamp" : _historyDateColumn.Trim()
                 }
             };
             var json = System.Text.Json.JsonSerializer.Serialize(payload,
@@ -224,15 +310,7 @@
                 return;
             }
 
-            var testSettings = new ErpSettings
-            {
-                Enabled = true,
-                ConnectionString = _connectionString.Trim(),
-                Query = _query.Trim(),
-                PoolColumn = string.IsNullOrWhiteSpace(_poolColumn) ? "Pool" : _poolColumn.Trim(),
-                QuantityColumn = string.IsNullOrWhiteSpace(_quantityColumn) ? "Quantity" : _quantityColumn.Trim(),
-                RefreshIntervalSeconds = Math.Max(10, _refreshInterval)
-            };
+            var testSettings = BuildCurrentSettings();
             _testRows = await ErpDataService.TestConnectionAsync(testSettings, 5);
         }
         catch (Exception ex)
@@ -244,4 +322,47 @@
             _testing = false;
         }
     }
+
+    private async Task TestHistoryConnection()
+    {
+        _testingHistory = true;
+        _historyTestError = null;
+        _historyTestRows = null;
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_connectionString))
+            {
+                _historyTestError = "Connection string is required.";
+                return;
+            }
+            if (string.IsNullOrWhiteSpace(_historyQuery))
+            {
+                _historyTestError = "History query is required.";
+                return;
+            }
+
+            var testSettings = BuildCurrentSettings();
+            _historyTestRows = await ErpDataService.TestHistoryConnectionAsync(testSettings, 10);
+        }
+        catch (Exception ex)
+        {
+            _historyTestError = $"Connection failed: {ex.Message}";
+        }
+        finally
+        {
+            _testingHistory = false;
+        }
+    }
+
+    private ErpSettings BuildCurrentSettings() => new()
+    {
+        Enabled = true,
+        ConnectionString = _connectionString.Trim(),
+        Query = _query.Trim(),
+        PoolColumn = string.IsNullOrWhiteSpace(_poolColumn) ? "Pool" : _poolColumn.Trim(),
+        QuantityColumn = string.IsNullOrWhiteSpace(_quantityColumn) ? "Quantity" : _quantityColumn.Trim(),
+        RefreshIntervalSeconds = Math.Max(10, _refreshInterval),
+        HistoryQuery = _historyQuery.Trim(),
+        HistoryDateColumn = string.IsNullOrWhiteSpace(_historyDateColumn) ? "Timestamp" : _historyDateColumn.Trim()
+    };
 }

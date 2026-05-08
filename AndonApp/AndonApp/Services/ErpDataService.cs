@@ -37,6 +37,64 @@ public class ErpDataService : IErpDataService
         return rows;
     }
 
+    public async Task<List<ErpBuildPoint>> FetchBuildHistoryAsync()
+    {
+        var settings = _options.CurrentValue;
+        if (!settings.Enabled || string.IsNullOrWhiteSpace(settings.HistoryQuery))
+            return new();
+
+        var result = new List<ErpBuildPoint>();
+        try
+        {
+            ValidateSelectQuery(settings.HistoryQuery);
+            await using var conn = new SqlConnection(settings.ConnectionString);
+            await conn.OpenAsync();
+            await using var cmd = new SqlCommand(settings.HistoryQuery, conn);
+            await using var reader = await cmd.ExecuteReaderAsync();
+
+            var dateCol = string.IsNullOrWhiteSpace(settings.HistoryDateColumn)
+                ? "Timestamp" : settings.HistoryDateColumn;
+
+            while (await reader.ReadAsync())
+            {
+                var pool = reader[settings.PoolColumn]?.ToString();
+                if (string.IsNullOrEmpty(pool)) continue;
+                if (!int.TryParse(reader[settings.QuantityColumn]?.ToString(), out var qty)) continue;
+                var tsRaw = reader[dateCol];
+                if (tsRaw == null || tsRaw == DBNull.Value) continue;
+                if (!DateTime.TryParse(tsRaw.ToString(), out var ts)) continue;
+                result.Add(new ErpBuildPoint(pool, ts, qty));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch ERP build history");
+        }
+        return result;
+    }
+
+    public async Task<List<Dictionary<string, object?>>> TestHistoryConnectionAsync(ErpSettings settings, int maxRows = 10)
+    {
+        if (string.IsNullOrWhiteSpace(settings.HistoryQuery))
+            return new();
+        ValidateSelectQuery(settings.HistoryQuery);
+        var rows = new List<Dictionary<string, object?>>();
+        await using var conn = new SqlConnection(settings.ConnectionString);
+        await conn.OpenAsync();
+        await using var cmd = new SqlCommand(settings.HistoryQuery, conn);
+        await using var reader = await cmd.ExecuteReaderAsync();
+        int count = 0;
+        while (await reader.ReadAsync() && count < maxRows)
+        {
+            var row = new Dictionary<string, object?>();
+            for (int i = 0; i < reader.FieldCount; i++)
+                row[reader.GetName(i)] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+            rows.Add(row);
+            count++;
+        }
+        return rows;
+    }
+
     private static void ValidateSelectQuery(string query)
     {
         var trimmed = query.Trim();
