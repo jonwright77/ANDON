@@ -330,18 +330,13 @@
     private RenderFragment RenderCell(int? target, int? built, double? pct, bool showErp) => __builder =>
     {
         int seq = 0;
-        if (target.HasValue)
+        if (showErp || target.HasValue)
         {
-            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "adh-cell-row");
-            __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "adh-cell-label"); __builder.AddContent(seq++, "Target"); __builder.CloseElement();
-            __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "adh-cell-value"); __builder.AddContent(seq++, target.Value.ToString("N0")); __builder.CloseElement();
-            __builder.CloseElement();
-        }
-        if (showErp)
-        {
-            __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "adh-cell-row");
-            __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "adh-cell-label"); __builder.AddContent(seq++, "Built"); __builder.CloseElement();
-            __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "adh-cell-value"); __builder.AddContent(seq++, built.HasValue ? built.Value.ToString("N0") : "–"); __builder.CloseElement();
+            __builder.OpenElement(seq++, "div");
+            __builder.AddAttribute(seq++, "class", "adh-fraction");
+            __builder.AddContent(seq++, showErp
+                ? $"{(built.HasValue ? built.Value.ToString("N0") : "–")} / {(target.HasValue ? target.Value.ToString("N0") : "–")}"
+                : target!.Value.ToString("N0"));
             __builder.CloseElement();
 
             if (pct.HasValue)
@@ -351,18 +346,13 @@
                 __builder.AddContent(seq++, $"{pct.Value:F0}%");
                 __builder.CloseElement();
             }
-            else if (target.HasValue)
-            {
-                __builder.OpenElement(seq++, "div"); __builder.AddAttribute(seq++, "class", "adh-pct-pill adh-pct-none"); __builder.AddContent(seq++, "–"); __builder.CloseElement();
-            }
-            else
-            {
-                __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "adh-no-data"); __builder.AddContent(seq++, "—"); __builder.CloseElement();
-            }
         }
-        else if (!target.HasValue)
+        else
         {
-            __builder.OpenElement(seq++, "span"); __builder.AddAttribute(seq++, "class", "adh-no-data"); __builder.AddContent(seq++, "—"); __builder.CloseElement();
+            __builder.OpenElement(seq++, "span");
+            __builder.AddAttribute(seq++, "class", "adh-no-data");
+            __builder.AddContent(seq++, "—");
+            __builder.CloseElement();
         }
     };
 
