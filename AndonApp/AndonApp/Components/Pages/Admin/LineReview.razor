@@ -178,6 +178,18 @@
                                      title="@pt.Timestamp.ToLocalTime().ToString("HH:mm") — @pt.Quantity.ToString("N0")">
                                 </div>
                             }
+                            @if (_totalBuild > 0)
+                            {
+                                <svg class="review-build-svg" viewBox="0 0 100 100"
+                                     preserveAspectRatio="none">
+                                    <polyline points="0,100 @GetCumulativePoints()"
+                                              fill="none"
+                                              stroke="rgba(15,65,160,0.9)"
+                                              stroke-width="2"
+                                              stroke-linejoin="round"
+                                              vector-effect="non-scaling-stroke" />
+                                </svg>
+                            }
                             @if (IsToday)
                             {
                                 <div class="review-now-line" style="left:@ToPercent(DateTime.Now.TimeOfDay).ToString("F2")%"></div>
@@ -277,6 +289,7 @@
     private bool _loadingBuild;
     private string? _buildError;
     private int _maxBuild;
+    private int _totalBuild;
 
     private bool ErpHistoryAvailable =>
         ErpOptions.CurrentValue.Enabled &&
@@ -339,7 +352,8 @@
                          && DateOnly.FromDateTime(p.Timestamp) == _selectedDate)
                 .OrderBy(p => p.Timestamp)
                 .ToList();
-            _maxBuild = _buildPoints.Any() ? _buildPoints.Max(p => p.Quantity) : 0;
+            _maxBuild   = _buildPoints.Any() ? _buildPoints.Max(p => p.Quantity) : 0;
+            _totalBuild = _buildPoints.Any() ? _buildPoints.Sum(p => p.Quantity) : 0;
 
             if (!_buildPoints.Any())
                 _buildError = $"No build data found for pool '{_line.Pool}' on {_selectedDate:dd MMM yyyy}.";
@@ -370,6 +384,21 @@
         if (_schedule == null) return 0;
         var total = (_schedule.EndTime - _schedule.StartTime).TotalMinutes;
         return (end - start).TotalMinutes / total * 100;
+    }
+
+    private string GetCumulativePoints()
+    {
+        if (!_buildPoints.Any() || _totalBuild == 0) return "";
+        var sb = new System.Text.StringBuilder();
+        int running = 0;
+        foreach (var pt in _buildPoints)
+        {
+            running += pt.Quantity;
+            var x = ToPercent(pt.Timestamp.TimeOfDay);
+            var y = 100.0 - (double)running / _totalBuild * 100.0;
+            sb.Append($"{x:F2},{y:F2} ");
+        }
+        return sb.ToString().TrimEnd();
     }
 
     private double IncidentLeft(TimeSpan startTime) => ToPercent(startTime);
