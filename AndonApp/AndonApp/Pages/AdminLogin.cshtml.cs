@@ -28,7 +28,7 @@ public class AdminLoginModel : PageModel
     public IActionResult OnGet()
     {
         if (User.Identity?.IsAuthenticated == true)
-            return Redirect("/admin/andon-codes");
+            return Redirect("/admin/overview");
         return Page();
     }
 
@@ -83,6 +83,6 @@ public class AdminLoginModel : PageModel
                 ExpiresUtc = DateTimeOffset.UtcNow.AddHours(8)
             });
 
-        return Redirect("/admin/andon-codes");
+        return Redirect("/admin/overview");
     }
 }
