@@ -9,6 +9,7 @@
 @inject IDbContextFactory<AndonDbContext> DbFactory
 @inject IErpDataService ErpDataService
 @inject IOptionsMonitor<ErpSettings> ErpOptions
+@inject IOptionsMonitor<AndonApp.Services.GeneralSettings> GeneralOptions
 @rendermode InteractiveServer
 
 <PageTitle>Schedule Adherence – Admin</PageTitle>
@@ -143,9 +144,9 @@
 
             <div class="adh-legend">
                 <span class="adh-legend-label">Key:</span>
-                <span class="adh-legend-item"><span class="adh-pct-pill adh-pct-green">&#8805; 100%</span> On / above target</span>
-                <span class="adh-legend-item"><span class="adh-pct-pill adh-pct-amber">80–99%</span> Slightly below</span>
-                <span class="adh-legend-item"><span class="adh-pct-pill adh-pct-red">&lt; 80%</span> Significantly below</span>
+                <span class="adh-legend-item"><span class="adh-pct-pill adh-pct-green">&#8805; @_greenPct%</span> On / above target</span>
+                <span class="adh-legend-item"><span class="adh-pct-pill adh-pct-amber">@_amberPct–@(_greenPct - 1)%</span> Slightly below</span>
+                <span class="adh-legend-item"><span class="adh-pct-pill adh-pct-red">&lt; @_amberPct%</span> Significantly below</span>
             </div>
         }
     }
@@ -164,6 +165,8 @@
     private Dictionary<(string Pool, DateOnly Date), int> _builtByPoolDate = new();
     private bool _loading = true;
     private bool _erpHistoryAvailable;
+    private int _greenPct = 100;
+    private int _amberPct = 80;
 
     private DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
     private List<DateOnly> WeekDays => Enumerable.Range(0, 7).Select(i => _weekStart.AddDays(i)).ToList();
@@ -209,6 +212,11 @@
     {
         _loading = true;
         StateHasChanged();
+
+        var gs = GeneralOptions.CurrentValue;
+        _greenPct = gs.AdherenceGreenThreshold > 0 ? gs.AdherenceGreenThreshold : 100;
+        _amberPct = gs.AdherenceAmberThreshold > 0 && gs.AdherenceAmberThreshold < _greenPct
+            ? gs.AdherenceAmberThreshold : Math.Max(1, _greenPct - 20);
 
         var settings = ErpOptions.CurrentValue;
         _erpHistoryAvailable = settings.Enabled && !string.IsNullOrWhiteSpace(settings.HistoryQuery);
@@ -309,19 +317,19 @@
 
     // ---- CSS helpers ----
 
-    private static string GetCellBg(double? pct, int? target)
+    private string GetCellBg(double? pct, int? target)
     {
         if (!target.HasValue) return "adh-cell-notarget";
         if (!pct.HasValue)    return "";
-        if (pct.Value >= 100) return "adh-cell-bg-green";
-        if (pct.Value >= 80)  return "adh-cell-bg-amber";
+        if (pct.Value >= _greenPct) return "adh-cell-bg-green";
+        if (pct.Value >= _amberPct) return "adh-cell-bg-amber";
         return "adh-cell-bg-red";
     }
 
-    private static string GetPctClass(double pct)
+    private string GetPctClass(double pct)
     {
-        if (pct >= 100) return "adh-pct-green";
-        if (pct >= 80)  return "adh-pct-amber";
+        if (pct >= _greenPct) return "adh-pct-green";
+        if (pct >= _amberPct) return "adh-pct-amber";
         return "adh-pct-red";
     }
 

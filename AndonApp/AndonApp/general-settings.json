@@ -1,5 +1,7 @@
 {
   "GeneralSettings": {
-    "CompanyName": "KAB Seating"
+    "CompanyName": "KAB Seating",
+    "AdherenceGreenThreshold": 100,
+    "AdherenceAmberThreshold": 85
   }
 }

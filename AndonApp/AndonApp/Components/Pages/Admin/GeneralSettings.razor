@@ -23,6 +23,8 @@
             <div class="alert alert-error">@_saveError</div>
         }
 
+        <p class="settings-section-title">Branding</p>
+
         <div class="form-group">
             <label>Company Name</label>
             <input class="form-control"
@@ -35,8 +37,47 @@
             </small>
         </div>
 
+        <p class="settings-section-title" style="margin-top:1.5rem">Schedule Adherence Thresholds</p>
+
+        <div class="adh-threshold-row">
+            <div class="form-group">
+                <label>On Target &mdash; green if score is at least</label>
+                <div class="adh-threshold-input">
+                    <input type="number" class="form-control"
+                           @bind="_greenThreshold"
+                           min="1" max="200" style="width:90px" />
+                    <span class="adh-threshold-unit">%</span>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>At Risk &mdash; amber if score is at least</label>
+                <div class="adh-threshold-input">
+                    <input type="number" class="form-control"
+                           @bind="_amberThreshold"
+                           min="1" max="200" style="width:90px" />
+                    <span class="adh-threshold-unit">%</span>
+                </div>
+            </div>
+        </div>
+
+        @if (_amberThreshold >= _greenThreshold)
+        {
+            <div class="alert alert-error" style="margin-top:0.75rem">
+                At Risk threshold must be lower than the On Target threshold.
+            </div>
+        }
+        else
+        {
+            <small class="help-text">
+                Score &ge; @_greenThreshold% &rarr; <strong style="color:#15803d">green</strong> &nbsp;|&nbsp;
+                @_amberThreshold%&ndash;@(_greenThreshold - 1)% &rarr; <strong style="color:#b45309">amber</strong> &nbsp;|&nbsp;
+                &lt; @_amberThreshold% &rarr; <strong style="color:#b91c1c">red</strong>
+            </small>
+        }
+
         <div class="erp-actions">
-            <button class="btn btn-primary" @onclick="SaveSettings" disabled="@_saving">
+            <button class="btn btn-primary" @onclick="SaveSettings"
+                    disabled="@(_saving || _amberThreshold >= _greenThreshold)">
                 @(_saving ? "Saving..." : "Save Settings")
             </button>
         </div>
@@ -45,13 +86,18 @@
 
 @code {
     private string _companyName = string.Empty;
+    private int _greenThreshold = 100;
+    private int _amberThreshold = 80;
     private bool _saving;
     private string? _saveSuccess;
     private string? _saveError;
 
     protected override void OnInitialized()
     {
-        _companyName = GeneralOptions.CurrentValue.CompanyName;
+        var s = GeneralOptions.CurrentValue;
+        _companyName    = s.CompanyName;
+        _greenThreshold = s.AdherenceGreenThreshold > 0 ? s.AdherenceGreenThreshold : 100;
+        _amberThreshold = s.AdherenceAmberThreshold > 0 ? s.AdherenceAmberThreshold : 80;
     }
 
     private async Task SaveSettings()
@@ -65,7 +111,9 @@
             {
                 GeneralSettings = new
                 {
-                    CompanyName = _companyName.Trim()
+                    CompanyName             = _companyName.Trim(),
+                    AdherenceGreenThreshold = _greenThreshold,
+                    AdherenceAmberThreshold = _amberThreshold
                 }
             };
             var json = System.Text.Json.JsonSerializer.Serialize(payload,

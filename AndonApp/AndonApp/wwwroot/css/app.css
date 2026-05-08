@@ -2189,6 +2189,29 @@ html.dark .admin-shell .adh-totals-cell.adh-cell-bg-red,
 html.dark .admin-shell .adh-week-cell.adh-cell-bg-red   { background: #2d0a0a; }
 
 /* ============================================================
+   GENERAL SETTINGS – ADHERENCE THRESHOLDS
+   ============================================================ */
+
+.adh-threshold-row {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+
+.adh-threshold-input {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.adh-threshold-unit {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--gray-700);
+}
+
+/* ============================================================
    RESPONSIVE
    ============================================================ */
 
