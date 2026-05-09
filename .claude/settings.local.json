@@ -10,7 +10,8 @@
       "Bash(dotnet restore:*)",
       "Bash(dotnet build:*)",
       "Bash(awk ' *)",
-      "Bash(git *)"
+      "Bash(git *)",
+      "Bash(grep -E '\\\\.\\(csproj|sln|json|cs\\)$')"
     ]
   }
 }
