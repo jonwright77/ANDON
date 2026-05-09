@@ -1206,6 +1206,11 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
    LINE REVIEW
    ============================================================ */
 
+.review-day-cards {
+  display: flex;
+  gap: 1rem;
+}
+
 .review-date-picker {
   display: flex;
   align-items: center;

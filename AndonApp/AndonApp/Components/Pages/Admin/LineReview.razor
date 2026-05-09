@@ -42,6 +42,22 @@
     }
     else
     {
+        <!-- Day summary cards -->
+        <div class="review-day-cards">
+            <div class="overview-totals-card">
+                <div class="overview-totals-card-label">Target</div>
+                <div class="overview-totals-card-value">
+                    @(_adminTarget.HasValue ? _adminTarget.Value.ToString("N0") : "–")
+                </div>
+            </div>
+            <div class="overview-totals-card">
+                <div class="overview-totals-card-label">Built</div>
+                <div class="overview-totals-card-value">
+                    @(ErpHistoryAvailable && _buildPoints.Any() ? _totalBuild.ToString("N0") : "–")
+                </div>
+            </div>
+        </div>
+
         <!-- Schedule summary -->
         @if (_schedule != null && _schedule.IsWorkday)
         {
