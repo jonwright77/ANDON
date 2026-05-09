@@ -8,7 +8,7 @@
 
 ASP.NET Core 8, Blazor Server (InteractiveServer), SQL Server / LocalDB, Entity Framework Core 8, SignalR, MailKit 4.9, ClosedXML, BCrypt.Net-Next.
 
-**CSS cache busting:** increment `?v=N` in `App.razor` whenever `app.css` changes. Current: `v=33`.
+**CSS cache busting:** increment `?v=N` in `App.razor` whenever `app.css` changes. Current: `v=34`.
 
 ---
 

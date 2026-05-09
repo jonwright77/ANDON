@@ -104,6 +104,68 @@
                     </div>
                 </div>
 
+                <!-- ERP Build chart track -->
+                @if (_buildPoints.Any())
+                {
+                    <div class="review-track-row review-build-row">
+                        <div class="review-track-label review-label-build">
+                            @foreach (var tick in GetYAxisTicks())
+                            {
+                                <span class="review-y-label" style="top:@tick.YPct.ToString("F2")%">@tick.Qty.ToString("N0")</span>
+                            }
+                        </div>
+                        <div class="review-track-area review-build-area">
+                            <div class="review-shift-fill review-shift-fill-muted"></div>
+                            @foreach (var brk in _schedule.Breaks.OrderBy(b => b.StartTime))
+                            {
+                                <div class="review-break-band review-break-band-muted"
+                                     style="left:@ToPercent(brk.StartTime).ToString("F2")%;width:@BandWidth(brk.StartTime,brk.EndTime).ToString("F2")%">
+                                </div>
+                            }
+                            @foreach (var pt in _buildPoints)
+                            {
+                                var barLeft = ToPercent(pt.Timestamp.TimeOfDay);
+                                var barHeight = _maxBuild > 0
+                                    ? Math.Max(2.0, (double)pt.Quantity / _maxBuild * 100)
+                                    : 2.0;
+                                <div class="review-build-bar"
+                                     style="left:@barLeft.ToString("F2")%;height:@barHeight.ToString("F2")%"
+                                     title="@pt.Timestamp.ToLocalTime().ToString("HH:mm") — @pt.Quantity.ToString("N0")">
+                                </div>
+                            }
+                            <svg class="review-build-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                                @foreach (var tick in GetYAxisTicks())
+                                {
+                                    <line x1="0" y1="@tick.YPct.ToString("F2")"
+                                          x2="100" y2="@tick.YPct.ToString("F2")"
+                                          stroke="rgba(0,0,0,0.08)" stroke-width="1"
+                                          vector-effect="non-scaling-stroke" />
+                                }
+                                @if (_totalBuild > 0)
+                                {
+                                    <polyline points="0,100 @GetCumulativePoints()"
+                                              fill="none"
+                                              stroke="rgba(15,65,160,0.9)"
+                                              stroke-width="2"
+                                              stroke-linejoin="round"
+                                              vector-effect="non-scaling-stroke" />
+                                }
+                                @if (_adminTarget.HasValue && _chartMaxY > 0)
+                                {
+                                    var tY = (100.0 - (double)_adminTarget.Value / _chartMaxY * 100.0).ToString("F2");
+                                    <line x1="0" y1="@tY" x2="100" y2="@tY"
+                                          stroke="rgba(211,47,47,0.9)" stroke-width="2"
+                                          stroke-dasharray="6,3" vector-effect="non-scaling-stroke" />
+                                }
+                            </svg>
+                            @if (IsToday)
+                            {
+                                <div class="review-now-line" style="left:@ToPercent(DateTime.Now.TimeOfDay).ToString("F2")%"></div>
+                            }
+                        </div>
+                    </div>
+                }
+
                 <!-- Incident rows -->
                 @if (!_incidents.Any())
                 {
@@ -142,53 +204,6 @@
                             </div>
                         </div>
                     }
-                }
-
-                <!-- ERP Build chart track -->
-                @if (_buildPoints.Any())
-                {
-                    <div class="review-track-row review-build-row">
-                        <div class="review-track-label review-label-build">
-                            <span>ERP Build</span>
-                            <span class="review-build-max">max @_maxBuild.ToString("N0")</span>
-                        </div>
-                        <div class="review-track-area review-build-area">
-                            <div class="review-shift-fill review-shift-fill-muted"></div>
-                            @foreach (var brk in _schedule.Breaks.OrderBy(b => b.StartTime))
-                            {
-                                <div class="review-break-band review-break-band-muted"
-                                     style="left:@ToPercent(brk.StartTime).ToString("F2")%;width:@BandWidth(brk.StartTime,brk.EndTime).ToString("F2")%">
-                                </div>
-                            }
-                            @foreach (var pt in _buildPoints)
-                            {
-                                var barLeft = ToPercent(pt.Timestamp.TimeOfDay);
-                                var barHeight = _maxBuild > 0
-                                    ? Math.Max(2.0, (double)pt.Quantity / _maxBuild * 100)
-                                    : 2.0;
-                                <div class="review-build-bar"
-                                     style="left:@barLeft.ToString("F2")%;height:@barHeight.ToString("F2")%"
-                                     title="@pt.Timestamp.ToLocalTime().ToString("HH:mm") — @pt.Quantity.ToString("N0")">
-                                </div>
-                            }
-                            @if (_totalBuild > 0)
-                            {
-                                <svg class="review-build-svg" viewBox="0 0 100 100"
-                                     preserveAspectRatio="none">
-                                    <polyline points="0,100 @GetCumulativePoints()"
-                                              fill="none"
-                                              stroke="rgba(15,65,160,0.9)"
-                                              stroke-width="2"
-                                              stroke-linejoin="round"
-                                              vector-effect="non-scaling-stroke" />
-                                </svg>
-                            }
-                            @if (IsToday)
-                            {
-                                <div class="review-now-line" style="left:@ToPercent(DateTime.Now.TimeOfDay).ToString("F2")%"></div>
-                            }
-                        </div>
-                    </div>
                 }
 
                 <!-- Axis bottom -->
@@ -283,6 +298,8 @@
     private string? _buildError;
     private int _maxBuild;
     private int _totalBuild;
+    private int? _adminTarget;
+    private int _chartMaxY;
 
     private bool ErpHistoryAvailable =>
         ErpOptions.CurrentValue.Enabled &&
@@ -331,6 +348,11 @@
             .OrderBy(i => i.CreatedAt)
             .ToListAsync();
 
+        var targetRow = await db.LineTargets
+            .FirstOrDefaultAsync(t => t.ProductionLineId == Id && t.Date == _selectedDate);
+        _adminTarget = targetRow?.Target;
+        _chartMaxY = _adminTarget ?? 0;
+
         _loading = false;
     }
 
@@ -349,6 +371,7 @@
                 .ToList();
             _maxBuild   = _buildPoints.Any() ? _buildPoints.Max(p => p.Quantity) : 0;
             _totalBuild = _buildPoints.Any() ? _buildPoints.Sum(p => p.Quantity) : 0;
+            _chartMaxY  = Math.Max(_totalBuild, _adminTarget ?? 0);
 
             if (!_buildPoints.Any())
                 _buildError = $"No build data found for pool '{_line.Pool}' on {_selectedDate:dd MMM yyyy}.";
@@ -383,17 +406,35 @@
 
     private string GetCumulativePoints()
     {
-        if (!_buildPoints.Any() || _totalBuild == 0) return "";
+        if (!_buildPoints.Any() || _chartMaxY == 0) return "";
         var sb = new System.Text.StringBuilder();
         int running = 0;
         foreach (var pt in _buildPoints)
         {
             running += pt.Quantity;
             var x = ToPercent(pt.Timestamp.TimeOfDay);
-            var y = 100.0 - (double)running / _totalBuild * 100.0;
+            var y = 100.0 - (double)running / _chartMaxY * 100.0;
             sb.Append($"{x:F2},{y:F2} ");
         }
         return sb.ToString().TrimEnd();
+    }
+
+    private List<(int Qty, double YPct)> GetYAxisTicks()
+    {
+        if (_chartMaxY <= 0) return new();
+        var ticks = new List<(int, double)>();
+        // Pick a step size that gives ~5 nice round-number ticks
+        double rawStep = _chartMaxY / 4.0;
+        double magnitude = Math.Pow(10, Math.Floor(Math.Log10(Math.Max(rawStep, 1))));
+        int step = (int)(Math.Ceiling(rawStep / magnitude) * magnitude);
+        if (step <= 0) step = 1;
+        for (int v = 0; v <= _chartMaxY + step; v += step)
+        {
+            var clamped = Math.Min(v, _chartMaxY);
+            ticks.Add((clamped, 100.0 - (double)clamped / _chartMaxY * 100.0));
+            if (clamped == _chartMaxY) break;
+        }
+        return ticks;
     }
 
     private double IncidentLeft(TimeSpan startTime) => ToPercent(startTime);

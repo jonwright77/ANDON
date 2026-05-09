@@ -1359,19 +1359,25 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
 .review-build-row { margin-top: 0.6rem; }
 
 .review-label-build {
-  flex-direction: column;
+  position: relative;
   align-items: flex-start;
-  gap: 0.1rem;
+  overflow: hidden;
 }
 
-.review-build-max {
-  font-size: 0.68rem;
-  font-weight: 500;
-  color: var(--text-secondary);
+.review-y-label {
+  position: absolute;
+  right: 6px;
+  font-size: 0.64rem;
+  color: var(--gray-400);
+  font-variant-numeric: tabular-nums;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  line-height: 1;
+  pointer-events: none;
 }
 
 .review-build-area {
-  height: 80px;
+  height: 160px;
 }
 
 .review-build-bar {
