@@ -7,7 +7,6 @@
 @using Microsoft.Extensions.Options
 @inject IDbContextFactory<AndonDbContext> DbFactory
 @inject NavigationManager Nav
-@inject IErpDataService ErpDataService
 @inject IOptionsMonitor<ErpSettings> ErpOptions
 @rendermode InteractiveServer
 
@@ -379,18 +378,23 @@
         _buildError = null;
         try
         {
-            var all = await ErpDataService.FetchBuildHistoryAsync();
-            _buildPoints = all
-                .Where(p => p.Pool.Equals(_line.Pool, StringComparison.OrdinalIgnoreCase)
-                         && DateOnly.FromDateTime(p.Timestamp) == _selectedDate)
-                .OrderBy(p => p.Timestamp)
-                .ToList();
+            var dayStart = _selectedDate.ToDateTime(TimeOnly.MinValue);
+            var dayEnd   = _selectedDate.ToDateTime(TimeOnly.MaxValue);
+
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var rows = await db.ErpBuildCaches
+                .Where(c => c.Pool == _line.Pool && c.Timestamp >= dayStart && c.Timestamp <= dayEnd)
+                .OrderBy(c => c.Timestamp)
+                .ToListAsync();
+
+            _buildPoints = rows.Select(r => new ErpBuildPoint(r.Pool, r.Timestamp, r.Quantity)).ToList();
             _maxBuild   = _buildPoints.Any() ? _buildPoints.Max(p => p.Quantity) : 0;
             _totalBuild = _buildPoints.Any() ? _buildPoints.Sum(p => p.Quantity) : 0;
             _chartMaxY  = Math.Max(_totalBuild, _adminTarget ?? 0);
 
             if (!_buildPoints.Any())
-                _buildError = $"No build data found for pool '{_line.Pool}' on {_selectedDate:dd MMM yyyy}.";
+                _buildError = $"No cached build data for pool '{_line.Pool}' on {_selectedDate:dd MMM yyyy}. " +
+                              $"Cache refreshes every {ErpOptions.CurrentValue.HistoryRefreshIntervalSeconds}s.";
         }
         catch (Exception ex)
         {

@@ -1382,7 +1382,7 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
 }
 
 .review-build-area {
-  height: 160px;
+  height: 320px;
 }
 
 .review-build-bar {

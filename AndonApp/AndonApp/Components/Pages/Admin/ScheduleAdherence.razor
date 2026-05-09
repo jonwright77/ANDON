@@ -7,7 +7,6 @@
 @using Microsoft.Extensions.Options
 @using System.Globalization
 @inject IDbContextFactory<AndonDbContext> DbFactory
-@inject IErpDataService ErpDataService
 @inject IOptionsMonitor<ErpSettings> ErpOptions
 @inject IOptionsMonitor<AndonApp.Services.GeneralSettings> GeneralOptions
 @rendermode InteractiveServer
@@ -248,11 +247,17 @@
         {
             try
             {
-                var allPoints = await ErpDataService.FetchBuildHistoryAsync();
-                _builtByPoolDate = allPoints
-                    .Where(p => weekDays.Contains(DateOnly.FromDateTime(p.Timestamp.ToLocalTime())))
-                    .GroupBy(p => (p.Pool, DateOnly.FromDateTime(p.Timestamp.ToLocalTime())))
-                    .ToDictionary(g => g.Key, g => g.Sum(p => p.Quantity));
+                var weekStartDt = _weekStart.ToDateTime(TimeOnly.MinValue);
+                var weekEndDt   = weekEnd.ToDateTime(TimeOnly.MaxValue);
+                var pools = _allLines.Where(l => l.Pool != null).Select(l => l.Pool!).Distinct().ToList();
+
+                var rows = await db.ErpBuildCaches
+                    .Where(c => pools.Contains(c.Pool) && c.Timestamp >= weekStartDt && c.Timestamp <= weekEndDt)
+                    .ToListAsync();
+
+                _builtByPoolDate = rows
+                    .GroupBy(c => (c.Pool, DateOnly.FromDateTime(c.Timestamp)))
+                    .ToDictionary(g => g.Key, g => g.Sum(c => c.Quantity));
             }
             catch { /* silently degrade — cells show "–" */ }
         }

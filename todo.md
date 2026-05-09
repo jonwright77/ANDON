@@ -42,7 +42,7 @@ ASP.NET Core 8, Blazor Server (InteractiveServer), SQL Server / LocalDB, Entity 
 **Tables:** `AdminUsers` (with `Role`), `AndonCodes`, `AndonCodeRecipients`, `ProductionLines`, `LineTypes`, `Incidents`, `LineSchedules`, `ScheduleBreaks`, `LineTargets`, `LineOperatorTargets`
 
 **Migrations (in order):**
-`InitialCreate` → `AddWorkSchedules` → `AddLineTargets` → `AddLineOperatorTargets` → `AddProductionLinePool` → `AddLineTypes` → `AddUserRole`
+`InitialCreate` → `AddWorkSchedules` → `AddLineTargets` → `AddLineOperatorTargets` → `AddProductionLinePool` → `AddLineTypes` → `AddUserRole` → `AddErpBuildCache`
 
 ---
 

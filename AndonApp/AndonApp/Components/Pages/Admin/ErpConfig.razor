@@ -5,6 +5,7 @@
 @using Microsoft.Extensions.Options
 @inject IOptionsMonitor<ErpSettings> ErpOptions
 @inject ErpPollStatus ErpPollStatus
+@inject ErpHistoryCache ErpHistoryCache
 @inject IErpDataService ErpDataService
 @inject IWebHostEnvironment Env
 @rendermode InteractiveServer
@@ -143,11 +144,38 @@
     }
 
     <!-- ── Historical Build Query ── -->
-    <div class="erp-form-card" style="margin-top:1.5rem">
+    @{
+        var hSnap = (ErpHistoryCache.LastRefreshed, ErpHistoryCache.CachedCount,
+                     ErpHistoryCache.LastError, ErpHistoryCache.IsRefreshing);
+    }
+    <div class="erp-status-bar @(hSnap.IsRefreshing ? "" : hSnap.LastRefreshed == null ? "" : hSnap.LastError == null ? "erp-status-ok" : "erp-status-error")"
+         style="margin-top:1.5rem">
+        @if (hSnap.IsRefreshing)
+        {
+            <span>History cache: refreshing&hellip;</span>
+        }
+        else if (hSnap.LastRefreshed == null)
+        {
+            <span>History cache: not yet populated this session.</span>
+        }
+        else if (hSnap.LastError == null)
+        {
+            <span class="erp-status-ok-text">
+                &#10003; History cache last refreshed @hSnap.LastRefreshed.Value.ToLocalTime().ToString("HH:mm:ss dd-MMM-yyyy")
+                &mdash; @hSnap.CachedCount record(s) cached
+            </span>
+        }
+        else
+        {
+            <span class="erp-status-error-text">&#10007; History cache error: @hSnap.LastError</span>
+        }
+    </div>
+
+    <div class="erp-form-card">
         <h3 class="erp-section-heading">Historical Build Query</h3>
         <p class="help-text" style="margin-bottom:1rem">
-            On-demand query used by the Line Review page to plot build quantities over time.
-            Must return at least three columns: the pool identifier, the quantity, and a date/time.
+            Query results are cached in a local table and refreshed in the background.
+            Line Review and Schedule Adherence read from this cache — no live ERP round-trip.
             Uses the same connection string, Pool Column, and Quantity Column as above.
         </p>
 
@@ -165,12 +193,21 @@
                 <input class="form-control" @bind="_historyDateColumn" placeholder="Timestamp" maxlength="100" />
                 <small class="help-text">The column containing the date/time of each build record.</small>
             </div>
+            <div class="form-group">
+                <label>Cache Refresh Interval (seconds)</label>
+                <input class="form-control" type="number" min="60" max="86400" @bind="_historyRefreshInterval" />
+                <small class="help-text">Minimum 60 s. Default 300 s (5 min).</small>
+            </div>
         </div>
 
         <div class="erp-actions">
             <button class="btn btn-secondary" @onclick="TestHistoryConnection"
-                    disabled="@(_testingHistory || _saving || _testing)">
+                    disabled="@(_testingHistory || _saving || _testing || _refreshingCache)">
                 @(_testingHistory ? "Testing..." : "Test History Query")
+            </button>
+            <button class="btn btn-secondary" @onclick="RefreshCacheNowAsync"
+                    disabled="@(_refreshingCache || hSnap.IsRefreshing || _saving)">
+                @(_refreshingCache ? "Refreshing..." : "Refresh Cache Now")
             </button>
         </div>
     </div>
@@ -228,6 +265,8 @@
 
     private string _historyQuery = string.Empty;
     private string _historyDateColumn = "Timestamp";
+    private int _historyRefreshInterval = 300;
+    private bool _refreshingCache;
 
     private bool _saving;
     private string? _saveError;
@@ -252,6 +291,7 @@
         _refreshInterval = Math.Max(10, s.RefreshIntervalSeconds);
         _historyQuery = s.HistoryQuery;
         _historyDateColumn = string.IsNullOrWhiteSpace(s.HistoryDateColumn) ? "Timestamp" : s.HistoryDateColumn;
+        _historyRefreshInterval = Math.Max(60, s.HistoryRefreshIntervalSeconds);
     }
 
     private async Task SaveSettings()
@@ -273,7 +313,8 @@
                     QuantityColumn = string.IsNullOrWhiteSpace(_quantityColumn) ? "Quantity" : _quantityColumn.Trim(),
                     RefreshIntervalSeconds = interval,
                     HistoryQuery = _historyQuery.Trim(),
-                    HistoryDateColumn = string.IsNullOrWhiteSpace(_historyDateColumn) ? "Timestamp" : _historyDateColumn.Trim()
+                    HistoryDateColumn = string.IsNullOrWhiteSpace(_historyDateColumn) ? "Timestamp" : _historyDateColumn.Trim(),
+                    HistoryRefreshIntervalSeconds = Math.Max(60, _historyRefreshInterval)
                 }
             };
             var json = System.Text.Json.JsonSerializer.Serialize(payload,
@@ -354,6 +395,13 @@
         }
     }
 
+    private async Task RefreshCacheNowAsync()
+    {
+        _refreshingCache = true;
+        await ErpHistoryCache.RefreshAsync();
+        _refreshingCache = false;
+    }
+
     private ErpSettings BuildCurrentSettings() => new()
     {
         Enabled = true,
@@ -363,6 +411,7 @@
         QuantityColumn = string.IsNullOrWhiteSpace(_quantityColumn) ? "Quantity" : _quantityColumn.Trim(),
         RefreshIntervalSeconds = Math.Max(10, _refreshInterval),
         HistoryQuery = _historyQuery.Trim(),
-        HistoryDateColumn = string.IsNullOrWhiteSpace(_historyDateColumn) ? "Timestamp" : _historyDateColumn.Trim()
+        HistoryDateColumn = string.IsNullOrWhiteSpace(_historyDateColumn) ? "Timestamp" : _historyDateColumn.Trim(),
+        HistoryRefreshIntervalSeconds = Math.Max(60, _historyRefreshInterval)
     };
 }

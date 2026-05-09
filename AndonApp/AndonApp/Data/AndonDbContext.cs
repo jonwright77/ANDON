@@ -17,6 +17,7 @@ public class AndonDbContext : DbContext
     public DbSet<LineTarget> LineTargets => Set<LineTarget>();
     public DbSet<LineOperatorTarget> LineOperatorTargets => Set<LineOperatorTarget>();
     public DbSet<LineType> LineTypes => Set<LineType>();
+    public DbSet<ErpBuildCache> ErpBuildCaches => Set<ErpBuildCache>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -115,5 +116,8 @@ public class AndonDbContext : DbContext
             .WithMany()
             .HasForeignKey(t => t.ProductionLineId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ErpBuildCache>()
+            .HasIndex(c => new { c.Pool, c.Timestamp });
     }
 }

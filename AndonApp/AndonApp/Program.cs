@@ -50,8 +50,10 @@ builder.Services.Configure<GeneralSettings>(builder.Configuration.GetSection("Ge
 // ---- ERP integration ----
 builder.Services.Configure<ErpSettings>(builder.Configuration.GetSection("ErpSettings"));
 builder.Services.AddSingleton<ErpPollStatus>();
+builder.Services.AddSingleton<ErpHistoryCache>();
 builder.Services.AddTransient<IErpDataService, ErpDataService>();
 builder.Services.AddHostedService<ErpPollingService>();
+builder.Services.AddHostedService<ErpHistoryPollingService>();
 
 // ---- Razor Pages (for login/logout) ----
 builder.Services.AddRazorPages();

@@ -11,7 +11,8 @@ public class ErpSettings
     public string QuantityColumn { get; set; } = "Quantity";
     public int RefreshIntervalSeconds { get; set; } = 60;
 
-    // Historical build query (on-demand, includes a datetime column)
+    // Historical build query — cached locally; background service refreshes on this interval
     public string HistoryQuery { get; set; } = string.Empty;
     public string HistoryDateColumn { get; set; } = "Timestamp";
+    public int HistoryRefreshIntervalSeconds { get; set; } = 300;
 }

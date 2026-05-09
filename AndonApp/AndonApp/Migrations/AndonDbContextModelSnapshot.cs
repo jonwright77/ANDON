@@ -58,6 +58,18 @@ namespace AndonApp.Migrations
                 b.ToTable("AndonCodeRecipients");
             });
 
+            modelBuilder.Entity("AndonApp.Data.Models.ErpBuildCache", b =>
+            {
+                b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int");
+                SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+                b.Property<string>("Pool").IsRequired().HasMaxLength(200).HasColumnType("nvarchar(200)");
+                b.Property<DateTime>("Timestamp").HasColumnType("datetime2");
+                b.Property<int>("Quantity").HasColumnType("int");
+                b.HasKey("Id");
+                b.HasIndex("Pool", "Timestamp");
+                b.ToTable("ErpBuildCaches");
+            });
+
             modelBuilder.Entity("AndonApp.Data.Models.Incident", b =>
             {
                 b.Property<int>("Id").ValueGeneratedOnAdd().HasColumnType("int");
