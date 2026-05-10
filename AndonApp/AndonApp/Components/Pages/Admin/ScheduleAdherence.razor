@@ -355,7 +355,7 @@
             if (pct.HasValue)
             {
                 __builder.OpenElement(seq++, "div");
-                __builder.AddAttribute(seq++, "class", $"adh-pct-pill {GetPctClass(pct.Value)}");
+                __builder.AddAttribute(seq++, "class", $"adh-pct-value {GetPctClass(pct.Value)}");
                 __builder.AddContent(seq++, $"{pct.Value:F0}%");
                 __builder.CloseElement();
             }

@@ -2047,9 +2047,9 @@ html.dark .theme-toggle::before { content: '☀'; }
   background: var(--gray-50);
 }
 
-.adh-cell-bg-green { background: #f0fdf4; }
-.adh-cell-bg-amber { background: #fffbeb; }
-.adh-cell-bg-red   { background: #fef2f2; }
+.adh-cell-bg-green { background: #dcfce7; }
+.adh-cell-bg-amber { background: #fef3c7; }
+.adh-cell-bg-red   { background: #fee2e2; }
 
 .adh-fraction {
   text-align: center;
@@ -2083,6 +2083,19 @@ html.dark .theme-toggle::before { content: '☀'; }
 .adh-pct-amber { background: #fef3c7; color: #b45309; }
 .adh-pct-red   { background: #fee2e2; color: #b91c1c; }
 .adh-pct-none  { background: var(--gray-100); color: var(--gray-400); }
+
+/* Percentage value — plain text, no capsule */
+.adh-pct-value {
+  display: block;
+  margin: 0.2rem auto 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  width: fit-content;
+}
+.adh-pct-value.adh-pct-green { color: #15803d; }
+.adh-pct-value.adh-pct-amber { color: #b45309; }
+.adh-pct-value.adh-pct-red   { color: #b91c1c; }
 
 /* Week total column */
 .adh-week-col {
@@ -2177,13 +2190,16 @@ html.dark .admin-shell .adh-day-today .adh-day-date { color: #93c5fd; }
 html.dark .admin-shell .adh-line-name-cell { background: var(--surface); border-color: var(--border); }
 html.dark .admin-shell .adh-cell { background: var(--surface); border-color: var(--border); }
 html.dark .admin-shell .adh-cell-notarget { background: var(--gray-50); }
-html.dark .admin-shell .adh-cell-bg-green { background: #052e16; }
-html.dark .admin-shell .adh-cell-bg-amber { background: #1c1400; }
-html.dark .admin-shell .adh-cell-bg-red   { background: #1f0f0f; }
+html.dark .admin-shell .adh-cell-bg-green { background: #14532d; }
+html.dark .admin-shell .adh-cell-bg-amber { background: #451a03; }
+html.dark .admin-shell .adh-cell-bg-red   { background: #7f1d1d; }
 html.dark .admin-shell .adh-fraction { color: #f1f5f9; }
 html.dark .admin-shell .adh-pct-green { background: #14532d; color: #86efac; }
 html.dark .admin-shell .adh-pct-amber { background: #451a03; color: #fde68a; }
 html.dark .admin-shell .adh-pct-red   { background: #7f1d1d; color: #fca5a5; }
+html.dark .admin-shell .adh-pct-value.adh-pct-green { color: #86efac; }
+html.dark .admin-shell .adh-pct-value.adh-pct-amber { color: #fde68a; }
+html.dark .admin-shell .adh-pct-value.adh-pct-red   { color: #fca5a5; }
 html.dark .admin-shell .adh-week-label { color: #f1f5f9; }
 html.dark .admin-shell .adh-controls { background: var(--surface); }
 html.dark .admin-shell .adh-week-col { background: var(--gray-100); border-color: var(--gray-400); }
@@ -2193,11 +2209,11 @@ html.dark .admin-shell .adh-totals-row td { background: #1e293b; border-color: v
 html.dark .admin-shell .adh-totals-cell { background: #0f172a; }
 html.dark .admin-shell .adh-totals-label { color: var(--gray-700); }
 html.dark .admin-shell .adh-totals-cell.adh-cell-bg-green,
-html.dark .admin-shell .adh-week-cell.adh-cell-bg-green { background: #052e16; }
+html.dark .admin-shell .adh-week-cell.adh-cell-bg-green { background: #14532d; }
 html.dark .admin-shell .adh-totals-cell.adh-cell-bg-amber,
-html.dark .admin-shell .adh-week-cell.adh-cell-bg-amber { background: #1c1200; }
+html.dark .admin-shell .adh-week-cell.adh-cell-bg-amber { background: #451a03; }
 html.dark .admin-shell .adh-totals-cell.adh-cell-bg-red,
-html.dark .admin-shell .adh-week-cell.adh-cell-bg-red   { background: #2d0a0a; }
+html.dark .admin-shell .adh-week-cell.adh-cell-bg-red   { background: #7f1d1d; }
 
 /* ============================================================
    GENERAL SETTINGS – ADHERENCE THRESHOLDS
