@@ -23,6 +23,8 @@
 }
 else
 {
+    <div class="line-screen-wrapper @GetBoardClass()">
+
     <div class="line-top-bar top-bar-@GetBoardClass()">
         <span class="top-bar-line-name">@_line!.Name</span>
         <span class="work-status-badge work-status-@GetWorkStatusClass()">@GetWorkStatus()</span>
@@ -127,6 +129,8 @@ else
             &#9678; Line Target
         </button>
     </div>
+
+    </div><!-- /.line-screen-wrapper -->
 }
 
 @if (_showModal)
