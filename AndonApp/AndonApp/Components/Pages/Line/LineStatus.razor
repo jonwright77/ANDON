@@ -44,10 +44,15 @@ else
                 {
                     <div class="stat-card-sub">@Fmt(_todaySchedule.StartTime) – @Fmt(_todaySchedule.EndTime)</div>
                 }
+                else
+                {
+                    <div class="stat-card-sub stat-card-sub-hidden">&nbsp;</div>
+                }
             </div>
             <div class="stat-card @GetStatCardClass()">
                 <div class="stat-card-label">Elapsed</div>
                 <div class="stat-card-value">@(GetElapsedMinutes() is int e ? FormatMinutes(e) : "–")</div>
+                <div class="stat-card-sub stat-card-sub-hidden">&nbsp;</div>
             </div>
             <div class="stat-card @GetStatCardClass()">
                 <div class="stat-card-label">Target</div>
@@ -55,6 +60,10 @@ else
                 @if (_todayOperatorTarget.HasValue)
                 {
                     <div class="stat-card-sub">Line: @_todayOperatorTarget.Value.ToString("N0")</div>
+                }
+                else
+                {
+                    <div class="stat-card-sub stat-card-sub-hidden">&nbsp;</div>
                 }
             </div>
             <div class="stat-card @GetStatCardClass()">
@@ -64,10 +73,15 @@ else
                 {
                     <div class="stat-card-sub">Line: @exOp.ToString("N0")</div>
                 }
+                else
+                {
+                    <div class="stat-card-sub stat-card-sub-hidden">&nbsp;</div>
+                }
             </div>
             <div class="stat-card @GetStatCardClass() @GetBuiltStaleClass()">
                 <div class="stat-card-label">Built</div>
                 <div class="stat-card-value">@(_builtQuantity.HasValue ? _builtQuantity.Value.ToString("N0") : "–")</div>
+                <div class="stat-card-sub stat-card-sub-hidden">&nbsp;</div>
             </div>
         </div>
 

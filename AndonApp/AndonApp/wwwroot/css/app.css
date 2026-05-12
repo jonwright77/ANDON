@@ -221,6 +221,10 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
   text-overflow: ellipsis;
 }
 
+.stat-card-sub-hidden {
+  visibility: hidden;
+}
+
 /* Main content area — centres ALL OK or incident board */
 .board-content {
   flex: 1;
@@ -244,16 +248,16 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
   user-select: none;
 }
 .all-ok-text {
-  font-size: clamp(5rem, 20vw, 14rem);
+  font-size: clamp(2rem, min(16vw, 26vh), 14rem);
   font-weight: 900;
   letter-spacing: -0.02em;
   text-shadow: 0 4px 24px rgba(0,0,0,0.2);
   line-height: 1;
 }
 .all-ok-line {
-  font-size: clamp(1.5rem, 4vw, 3rem);
+  font-size: clamp(0.8rem, min(3.5vw, 5vh), 3rem);
   font-weight: 600;
-  margin-top: 1rem;
+  margin-top: clamp(0.3rem, 1vh, 1rem);
   opacity: 0.9;
 }
 
@@ -2267,7 +2271,6 @@ html.dark .admin-shell .adh-week-cell.adh-cell-bg-red   { background: #7f1d1d; }
 
 @media (max-width: 768px) {
   .incident-list { grid-template-columns: 1fr; }
-  .all-ok-text { font-size: clamp(4rem, 25vw, 8rem); }
   .admin-nav { padding: 0 1rem; }
   .admin-main { padding: 1rem; }
   .board-header { flex-direction: column; align-items: flex-start; gap: 0.5rem; }
