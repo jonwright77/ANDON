@@ -3,8 +3,10 @@
 @layout AndonApp.Components.Layout.AdminLayout
 @using AndonApp.Data
 @using AndonApp.Data.Models
+@using Microsoft.AspNetCore.Components.Authorization
 @inject IDbContextFactory<AndonDbContext> DbFactory
 @inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
 @rendermode InteractiveServer
 
 <PageTitle>Targets – @(_line?.Name ?? "Line") – Admin</PageTitle>
@@ -42,27 +44,42 @@
 
                     @if (day.IsCurrentMonth)
                     {
-                        @if (day.IsEditing)
+                        @if (_canEdit)
                         {
-                            <input class="calendar-target-input"
-                                   type="number"
-                                   min="0"
-                                   @bind="day.EditValue"
-                                   @onkeydown="e => HandleKey(e, day)" />
-                            <div class="calendar-edit-actions">
-                                <button class="btn btn-sm btn-primary" @onclick="() => SaveTarget(day)">Save</button>
-                                <button class="btn btn-sm btn-secondary" @onclick="() => CancelEdit(day)">Cancel</button>
-                                @if (day.Target.HasValue)
+                            @if (day.IsEditing)
+                            {
+                                <input class="calendar-target-input"
+                                       type="number"
+                                       min="0"
+                                       @bind="day.EditValue"
+                                       @onkeydown="e => HandleKey(e, day)" />
+                                <div class="calendar-edit-actions">
+                                    <button class="btn btn-sm btn-primary" @onclick="() => SaveTarget(day)">Save</button>
+                                    <button class="btn btn-sm btn-secondary" @onclick="() => CancelEdit(day)">Cancel</button>
+                                    @if (day.Target.HasValue)
+                                    {
+                                        <button class="btn btn-sm btn-danger" @onclick="() => ClearTarget(day)">Clear</button>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="calendar-target @(day.Target.HasValue ? "calendar-target-set" : "calendar-target-empty")"
+                                     @onclick="() => StartEdit(day)">
+                                    @(day.Target.HasValue ? day.Target.Value.ToString("N0") : "+")
+                                </div>
+                                @if (day.OperatorTarget.HasValue)
                                 {
-                                    <button class="btn btn-sm btn-danger" @onclick="() => ClearTarget(day)">Clear</button>
+                                    <div class="calendar-operator-target">
+                                        Line: @day.OperatorTarget.Value.ToString("N0")
+                                    </div>
                                 }
-                            </div>
+                            }
                         }
                         else
                         {
-                            <div class="calendar-target @(day.Target.HasValue ? "calendar-target-set" : "calendar-target-empty")"
-                                 @onclick="() => StartEdit(day)">
-                                @(day.Target.HasValue ? day.Target.Value.ToString("N0") : "+")
+                            <div class="calendar-target @(day.Target.HasValue ? "calendar-target-set" : "")">
+                                @(day.Target.HasValue ? day.Target.Value.ToString("N0") : "–")
                             </div>
                             @if (day.OperatorTarget.HasValue)
                             {
@@ -85,9 +102,13 @@
     private List<CalendarDay>? _days;
     private int _year = DateTime.Today.Year;
     private int _month = DateTime.Today.Month;
+    private bool _canEdit;
 
     protected override async Task OnInitializedAsync()
     {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        _canEdit = state.User.IsInRole("Admin") || state.User.IsInRole("Manager");
+
         await using var db = await DbFactory.CreateDbContextAsync();
         _line = await db.ProductionLines.FindAsync(Id);
         if (_line == null) { Nav.NavigateTo("/admin/lines"); return; }

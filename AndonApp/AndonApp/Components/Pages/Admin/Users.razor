@@ -46,7 +46,7 @@
                             }
                         </td>
                         <td>
-                            <span class="badge @(user.Role == "Admin" ? "badge-blue" : "badge-green")">
+                            <span class="badge @(user.Role == "Admin" ? "badge-blue" : user.Role == "Manager" ? "badge-green" : "badge-gray")">
                                 @user.Role
                             </span>
                         </td>
@@ -94,10 +94,12 @@
                     <select class="form-control" @bind="_form.Role">
                         <option value="Admin">Admin</option>
                         <option value="Manager">Manager</option>
+                        <option value="Production">Production</option>
                     </select>
                     <small class="help-text">
                         <strong>Admin</strong> — full access including user, email &amp; ERP settings.<br />
-                        <strong>Manager</strong> — access to lines, targets, ANDON codes and overview only.
+                        <strong>Manager</strong> — full access to lines, targets, ANDON codes and overview.<br />
+                        <strong>Production</strong> — view-only access to the same screens as Manager.
                     </small>
                 </div>
             </div>
@@ -186,7 +188,7 @@
             _addError = "Password must be at least 8 characters.";
             return;
         }
-        if (_form.Role != "Admin" && _form.Role != "Manager")
+        if (_form.Role != "Admin" && _form.Role != "Manager" && _form.Role != "Production")
         {
             _addError = "Invalid role.";
             return;

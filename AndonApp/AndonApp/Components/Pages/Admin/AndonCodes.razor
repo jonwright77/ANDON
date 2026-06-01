@@ -12,7 +12,9 @@
 <div class="admin-page">
     <div class="page-header">
         <h1>ANDON Codes</h1>
-        <button class="btn btn-primary" @onclick="() => OpenModal(null)">+ New Code</button>
+        <AuthorizeView Roles="Admin,Manager">
+            <button class="btn btn-primary" @onclick="() => OpenModal(null)">+ New Code</button>
+        </AuthorizeView>
     </div>
 
     @if (_codes == null)
@@ -51,8 +53,10 @@
                         <td>@(code.Recipients.Count)</td>
                         <td>
                             <a href="/admin/andon-codes/@(code.Id)/recipients" class="btn btn-sm">Recipients</a>
-                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenModal(code)">Edit</button>
-                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(code)">Delete</button>
+                            <AuthorizeView Roles="Admin,Manager">
+                                <button class="btn btn-sm btn-secondary" @onclick="() => OpenModal(code)">Edit</button>
+                                <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(code)">Delete</button>
+                            </AuthorizeView>
                         </td>
                     </tr>
                 }

@@ -1,8 +1,10 @@
 @page "/admin/lines/{Id:int}/schedule"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize(Policy = "ManagerOrAdmin")]
 @layout AndonApp.Components.Layout.AdminLayout
+@using Microsoft.AspNetCore.Components.Authorization
 @inject IDbContextFactory<AndonDbContext> DbFactory
 @inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthStateProvider
 @rendermode InteractiveServer
 
 <PageTitle>Schedule – @(_line?.Name ?? "Line") – Admin</PageTitle>
@@ -28,7 +30,7 @@
                     <div class="schedule-card-header">
                         <span class="schedule-day-name">@day.Day.ToString()</span>
                         <label class="workday-toggle">
-                            <input type="checkbox" @bind="day.IsWorkday" />
+                            <input type="checkbox" @bind="day.IsWorkday" disabled="@(!_canEdit)" />
                             <span>Workday</span>
                         </label>
                     </div>
@@ -41,6 +43,7 @@
                                     <label>Start</label>
                                     <input type="time" class="form-control"
                                            value="@day.StartTime"
+                                           disabled="@(!_canEdit)"
                                            @onchange="e => day.StartTime = e.Value?.ToString() ?? day.StartTime" />
                                 </div>
                                 <span class="time-sep">to</span>
@@ -48,6 +51,7 @@
                                     <label>End</label>
                                     <input type="time" class="form-control"
                                            value="@day.EndTime"
+                                           disabled="@(!_canEdit)"
                                            @onchange="e => day.EndTime = e.Value?.ToString() ?? day.EndTime" />
                                 </div>
                             </div>
@@ -60,48 +64,54 @@
                                         <div class="break-item">
                                             <span class="break-name">@brk.Name</span>
                                             <span class="break-time">@Fmt(brk.StartTime)–@Fmt(brk.EndTime)</span>
-                                            <button class="btn-break-remove" title="Remove"
-                                                    @onclick="() => RemoveBreak(day, brk)">&#x2715;</button>
+                                            @if (_canEdit)
+                                            {
+                                                <button class="btn-break-remove" title="Remove"
+                                                        @onclick="() => RemoveBreak(day, brk)">&#x2715;</button>
+                                            }
                                         </div>
                                     }
                                 </div>
                             }
 
-                            @if (day.ShowAddBreak)
+                            @if (_canEdit)
                             {
-                                <div class="add-break-form">
-                                    <input class="form-control" placeholder="Name (e.g. Lunch)"
-                                           @bind="day.NewBreakName" maxlength="100" />
-                                    <div class="add-break-times">
-                                        <input type="time" class="form-control"
-                                               value="@day.NewBreakStart"
-                                               @onchange="e => day.NewBreakStart = e.Value?.ToString() ?? day.NewBreakStart" />
-                                        <span class="time-sep">to</span>
-                                        <input type="time" class="form-control"
-                                               value="@day.NewBreakEnd"
-                                               @onchange="e => day.NewBreakEnd = e.Value?.ToString() ?? day.NewBreakEnd" />
+                                @if (day.ShowAddBreak)
+                                {
+                                    <div class="add-break-form">
+                                        <input class="form-control" placeholder="Name (e.g. Lunch)"
+                                               @bind="day.NewBreakName" maxlength="100" />
+                                        <div class="add-break-times">
+                                            <input type="time" class="form-control"
+                                                   value="@day.NewBreakStart"
+                                                   @onchange="e => day.NewBreakStart = e.Value?.ToString() ?? day.NewBreakStart" />
+                                            <span class="time-sep">to</span>
+                                            <input type="time" class="form-control"
+                                                   value="@day.NewBreakEnd"
+                                                   @onchange="e => day.NewBreakEnd = e.Value?.ToString() ?? day.NewBreakEnd" />
+                                        </div>
+                                        @if (!string.IsNullOrEmpty(day.BreakError))
+                                        {
+                                            <div class="alert alert-error">@day.BreakError</div>
+                                        }
+                                        <div class="add-break-actions">
+                                            <button class="btn btn-sm btn-secondary"
+                                                    @onclick="() => { day.ShowAddBreak = false; day.BreakError = null; }">
+                                                Cancel
+                                            </button>
+                                            <button class="btn btn-sm btn-primary" @onclick="() => AddBreak(day)">
+                                                Add
+                                            </button>
+                                        </div>
                                     </div>
-                                    @if (!string.IsNullOrEmpty(day.BreakError))
-                                    {
-                                        <div class="alert alert-error">@day.BreakError</div>
-                                    }
-                                    <div class="add-break-actions">
-                                        <button class="btn btn-sm btn-secondary"
-                                                @onclick="() => { day.ShowAddBreak = false; day.BreakError = null; }">
-                                            Cancel
-                                        </button>
-                                        <button class="btn btn-sm btn-primary" @onclick="() => AddBreak(day)">
-                                            Add
-                                        </button>
-                                    </div>
-                                </div>
-                            }
-                            else
-                            {
-                                <button class="btn btn-sm add-break-btn"
-                                        @onclick="() => { day.ShowAddBreak = true; day.BreakError = null; }">
-                                    + Add Break
-                                </button>
+                                }
+                                else
+                                {
+                                    <button class="btn btn-sm add-break-btn"
+                                            @onclick="() => { day.ShowAddBreak = true; day.BreakError = null; }">
+                                        + Add Break
+                                    </button>
+                                }
                             }
                         </div>
                     }
@@ -119,9 +129,12 @@
                         {
                             <span class="schedule-saved">&#x2713; Saved</span>
                         }
-                        <button class="btn btn-primary btn-sm" @onclick="() => SaveDay(day)" disabled="@day.Saving">
-                            @(day.Saving ? "Saving..." : "Save")
-                        </button>
+                        @if (_canEdit)
+                        {
+                            <button class="btn btn-primary btn-sm" @onclick="() => SaveDay(day)" disabled="@day.Saving">
+                                @(day.Saving ? "Saving..." : "Save")
+                            </button>
+                        }
                     </div>
                 </div>
             }
@@ -134,9 +147,13 @@
 
     private ProductionLine? _line;
     private List<DayModel>? _days;
+    private bool _canEdit;
 
     protected override async Task OnInitializedAsync()
     {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        _canEdit = state.User.IsInRole("Admin") || state.User.IsInRole("Manager");
+
         await using var db = await DbFactory.CreateDbContextAsync();
         _line = await db.ProductionLines.FindAsync(Id);
         if (_line == null) { Nav.NavigateTo("/admin/lines"); return; }

@@ -15,7 +15,9 @@
             <a href="/admin/andon-codes" class="back-link">&larr; Back to ANDON Codes</a>
             <h1>Recipients for <strong>@_code?.Code</strong> @_code?.Name</h1>
         </div>
-        <button class="btn btn-primary" @onclick="ShowAdd">+ Add Email</button>
+        <AuthorizeView Roles="Admin,Manager">
+            <button class="btn btn-primary" @onclick="ShowAdd">+ Add Email</button>
+        </AuthorizeView>
     </div>
 
     @if (_code == null)
@@ -41,7 +43,9 @@
                     <tr>
                         <td>@r.Email</td>
                         <td>
-                            <button class="btn btn-sm btn-danger" @onclick="() => RemoveRecipient(r)">Remove</button>
+                            <AuthorizeView Roles="Admin,Manager">
+                                <button class="btn btn-sm btn-danger" @onclick="() => RemoveRecipient(r)">Remove</button>
+                            </AuthorizeView>
                         </td>
                     </tr>
                 }

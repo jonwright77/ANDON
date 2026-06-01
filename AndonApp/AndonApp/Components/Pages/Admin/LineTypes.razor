@@ -11,7 +11,9 @@
 <div class="admin-page">
     <div class="page-header">
         <h1>Line Types</h1>
-        <button class="btn btn-primary" @onclick="() => OpenModal(null)">+ New Type</button>
+        <AuthorizeView Roles="Admin,Manager">
+            <button class="btn btn-primary" @onclick="() => OpenModal(null)">+ New Type</button>
+        </AuthorizeView>
     </div>
 
     @if (_types == null)
@@ -50,8 +52,10 @@
                             }
                         </td>
                         <td>
-                            <button class="btn btn-sm btn-secondary" @onclick="() => OpenModal(type)">Edit</button>
-                            <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(type)">Delete</button>
+                            <AuthorizeView Roles="Admin,Manager">
+                                <button class="btn btn-sm btn-secondary" @onclick="() => OpenModal(type)">Edit</button>
+                                <button class="btn btn-sm btn-danger" @onclick="() => ConfirmDelete(type)">Delete</button>
+                            </AuthorizeView>
                         </td>
                     </tr>
                 }
