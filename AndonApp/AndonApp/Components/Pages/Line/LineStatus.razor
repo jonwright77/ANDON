@@ -78,7 +78,7 @@ else
                     <div class="stat-card-sub stat-card-sub-hidden">&nbsp;</div>
                 }
             </div>
-            <div class="stat-card @GetStatCardClass() @GetBuiltStaleClass()">
+            <div class="stat-card @GetBuiltCardClass() @GetBuiltStaleClass()">
                 <div class="stat-card-label">Built</div>
                 <div class="stat-card-value">@(_builtQuantity.HasValue ? _builtQuantity.Value.ToString("N0") : "–")</div>
                 <div class="stat-card-sub stat-card-sub-hidden">&nbsp;</div>
@@ -521,6 +521,14 @@ else
 
     private string GetIncidentClass(IncidentSummaryDto i) =>
         i.Severity == Severity.RED ? "incident-red" : "incident-amber";
+
+    private string GetBuiltCardClass()
+    {
+        if (!_builtQuantity.HasValue) return GetStatCardClass();
+        var expected = GetExpected();
+        if (expected == null) return GetStatCardClass();
+        return _builtQuantity.Value >= expected.Value ? "stat-card-green" : "stat-card-red";
+    }
 
     private string GetBuiltStaleClass()
     {
