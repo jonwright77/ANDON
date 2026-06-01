@@ -97,6 +97,7 @@
                             </span>
                         }
                     </div>
+                    <div class="review-track-label-right"></div>
                 </div>
 
                 <!-- Schedule track -->
@@ -117,6 +118,7 @@
                             <div class="review-now-line" style="left:@ToPercent(DateTime.Now.TimeOfDay).ToString("F2")%"></div>
                         }
                     </div>
+                    <div class="review-track-label-right"></div>
                 </div>
 
                 <!-- ERP Build chart track -->
@@ -178,6 +180,12 @@
                                 <div class="review-now-line" style="left:@ToPercent(DateTime.Now.TimeOfDay).ToString("F2")%"></div>
                             }
                         </div>
+                        <div class="review-track-label-right review-label-build-right">
+                            @foreach (var tick in GetBarYAxisTicks())
+                            {
+                                <span class="review-y-label-right" style="top:@tick.YPct.ToString("F2")%">@tick.Qty.ToString("N0")</span>
+                            }
+                        </div>
                     </div>
                 }
 
@@ -217,6 +225,7 @@
                                      title="@incident.AndonCode.Code – @startLocal.ToString("HH:mm") to @(isOpen ? "Open" : endLocal.ToString("HH:mm"))">
                                 </div>
                             </div>
+                            <div class="review-track-label-right"></div>
                         </div>
                     }
                 }
@@ -232,6 +241,7 @@
                             </span>
                         }
                     </div>
+                    <div class="review-track-label-right"></div>
                 </div>
 
             </div>
@@ -453,6 +463,23 @@
             var clamped = Math.Min(v, _chartMaxY);
             ticks.Add((clamped, 100.0 - (double)clamped / _chartMaxY * 100.0));
             if (clamped == _chartMaxY) break;
+        }
+        return ticks;
+    }
+
+    private List<(int Qty, double YPct)> GetBarYAxisTicks()
+    {
+        if (_maxBuild <= 0) return new();
+        var ticks = new List<(int, double)>();
+        double rawStep = _maxBuild / 4.0;
+        double magnitude = Math.Pow(10, Math.Floor(Math.Log10(Math.Max(rawStep, 1))));
+        int step = (int)(Math.Ceiling(rawStep / magnitude) * magnitude);
+        if (step <= 0) step = 1;
+        for (int v = 0; v <= _maxBuild + step; v += step)
+        {
+            var clamped = Math.Min(v, _maxBuild);
+            ticks.Add((clamped, 100.0 - (double)clamped / _maxBuild * 100.0));
+            if (clamped == _maxBuild) break;
         }
         return ticks;
     }

@@ -1436,6 +1436,31 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
   overflow: visible;
 }
 
+.review-track-label-right {
+  width: 60px;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+  align-items: flex-start;
+}
+
+.review-label-build-right {
+  position: relative;
+  overflow: hidden;
+}
+
+.review-y-label-right {
+  position: absolute;
+  left: 6px;
+  font-size: 0.64rem;
+  color: rgba(25, 100, 200, 0.6);
+  font-variant-numeric: tabular-nums;
+  transform: translateY(-50%);
+  white-space: nowrap;
+  line-height: 1;
+  pointer-events: none;
+}
+
 /* Severity badges in label */
 .review-sev-badge {
   font-size: 0.68rem;
