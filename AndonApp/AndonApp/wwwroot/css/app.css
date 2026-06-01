@@ -1688,6 +1688,9 @@ html, body { height: 100%; font-family: var(--font); color: var(--gray-900); bac
 
 .overview-stat-stale { opacity: 0.5; }
 
+.overview-built-good    { color: #a5ffb8; }
+.overview-built-behind  { color: #ff8a80; }
+
 .overview-empty {
   grid-column: 1 / -1;
   text-align: center;

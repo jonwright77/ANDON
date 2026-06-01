@@ -92,7 +92,7 @@
                                 </div>
                                 <div class="overview-stat">
                                     <div class="overview-stat-label">Built</div>
-                                    <div class="overview-stat-value @(builtStale ? "overview-stat-stale" : "")">
+                                    <div class="overview-stat-value @GetBuiltValueClass(card) @(builtStale ? "overview-stat-stale" : "")">
                                         @(card.BuiltQuantity.HasValue ? card.BuiltQuantity.Value.ToString("N0") : "–")
                                     </div>
                                 </div>
@@ -110,7 +110,7 @@
                             </div>
                             <div class="overview-totals-card">
                                 <div class="overview-totals-card-label">Built</div>
-                                <div class="overview-totals-card-value">@(groupBuilt.HasValue ? groupBuilt.Value.ToString("N0") : "–")</div>
+                                <div class="overview-totals-card-value @GetBuiltTotalClass(groupBuilt, groupExpected)">@(groupBuilt.HasValue ? groupBuilt.Value.ToString("N0") : "–")</div>
                             </div>
                         </div>
                     </div>
@@ -128,7 +128,7 @@
                 </div>
                 <div class="overview-totals-card overview-totals-card-lg">
                     <div class="overview-totals-card-label">Built</div>
-                    <div class="overview-totals-card-value">@(grandBuilt.HasValue ? grandBuilt.Value.ToString("N0") : "–")</div>
+                    <div class="overview-totals-card-value @GetBuiltTotalClass(grandBuilt, grandExpected)">@(grandBuilt.HasValue ? grandBuilt.Value.ToString("N0") : "–")</div>
                 </div>
             </div>
         </div>
@@ -383,6 +383,20 @@
         if (card.RedIncidentIds.Count > 0) return "overview-card-red";
         if (card.AmberIncidentIds.Count > 0) return "overview-card-amber";
         return "overview-card-green";
+    }
+
+    private string GetBuiltValueClass(LineCard card)
+    {
+        if (!card.BuiltQuantity.HasValue) return string.Empty;
+        var expected = GetExpected(card);
+        if (!expected.HasValue) return string.Empty;
+        return card.BuiltQuantity.Value >= expected.Value ? "overview-built-good" : "overview-built-behind";
+    }
+
+    private static string GetBuiltTotalClass(int? built, int? expected)
+    {
+        if (!built.HasValue || !expected.HasValue) return string.Empty;
+        return built.Value >= expected.Value ? "overview-built-good" : "overview-built-behind";
     }
 
     private bool IsBuiltStale(LineCard card)
