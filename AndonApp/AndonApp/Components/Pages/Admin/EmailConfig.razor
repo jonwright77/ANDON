@@ -73,6 +73,17 @@
             </div>
         </div>
 
+        <div class="form-group">
+            <label>Security / TLS</label>
+            <select class="form-control" style="max-width:260px" @bind="_secure">
+                <option value="">Auto (port 465 → SSL, others → STARTTLS if available)</option>
+                <option value="SSL">SSL on Connect (port 465 / SMTPS)</option>
+                <option value="STARTTLS">STARTTLS (port 587)</option>
+                <option value="NONE">None (plain / unauthenticated relay, port 25)</option>
+            </select>
+            <small class="help-text">If you are connecting to a company relay on port 25 with no TLS, choose <strong>None</strong>. For port 465 choose <strong>SSL on Connect</strong>.</small>
+        </div>
+
         <div class="email-smtp-grid">
             <div class="form-group">
                 <label>Username <small>(leave blank for unauthenticated relay)</small></label>
@@ -149,6 +160,7 @@
     private string _from = "andon@example.com";
     private string _host = "";
     private int _port = 587;
+    private string _secure = "";
     private string _user = "";
     private string _pass = "";
     private bool _showPass;
@@ -164,12 +176,13 @@
 
     protected override void OnInitialized()
     {
-        _mode = Config["EMAIL_MODE"] ?? "LogOnly";
-        _from = Config["EMAIL_FROM"] ?? "andon@example.com";
-        _host = Config["SMTP_HOST"] ?? "";
-        _port = int.TryParse(Config["SMTP_PORT"], out var p) ? p : 587;
-        _user = Config["SMTP_USER"] ?? "";
-        _pass = Config["SMTP_PASS"] ?? "";
+        _mode   = Config["EMAIL_MODE"] ?? "LogOnly";
+        _from   = Config["EMAIL_FROM"] ?? "andon@example.com";
+        _host   = Config["SMTP_HOST"] ?? "";
+        _port   = int.TryParse(Config["SMTP_PORT"], out var p) ? p : 587;
+        _secure = Config["SMTP_SECURE"] ?? "";
+        _user   = Config["SMTP_USER"] ?? "";
+        _pass   = Config["SMTP_PASS"] ?? "";
     }
 
     private async Task SaveSettings()
@@ -181,12 +194,13 @@
         {
             var payload = new Dictionary<string, object>
             {
-                ["EMAIL_MODE"] = _mode,
-                ["EMAIL_FROM"] = _from.Trim(),
-                ["SMTP_HOST"]  = _host.Trim(),
-                ["SMTP_PORT"]  = _port.ToString(),
-                ["SMTP_USER"]  = _user.Trim(),
-                ["SMTP_PASS"]  = _pass
+                ["EMAIL_MODE"]   = _mode,
+                ["EMAIL_FROM"]   = _from.Trim(),
+                ["SMTP_HOST"]    = _host.Trim(),
+                ["SMTP_PORT"]    = _port.ToString(),
+                ["SMTP_SECURE"]  = _secure,
+                ["SMTP_USER"]    = _user.Trim(),
+                ["SMTP_PASS"]    = _pass
             };
             var json = System.Text.Json.JsonSerializer.Serialize(payload,
                 new System.Text.Json.JsonSerializerOptions { WriteIndented = true });

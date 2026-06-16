@@ -222,6 +222,22 @@ public class EmailService : IEmailService
 
     // ---- Transport ----
 
+    private static SecureSocketOptions ResolveSocketOptions(int port, string? configuredMode)
+    {
+        if (!string.IsNullOrEmpty(configuredMode))
+        {
+            return configuredMode.ToUpperInvariant() switch
+            {
+                "SSL"      => SecureSocketOptions.SslOnConnect,
+                "STARTTLS" => SecureSocketOptions.StartTls,
+                "NONE"     => SecureSocketOptions.None,
+                _          => SecureSocketOptions.StartTlsWhenAvailable,
+            };
+        }
+        // Auto-detect: port 465 is implicit SSL; everything else negotiate
+        return port == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTlsWhenAvailable;
+    }
+
     private async Task SendToRecipientsAsync(Incident incident, string subject, string plain, string html)
     {
         var recipients = incident.AndonCode.Recipients.Select(r => r.Email).ToList();
@@ -251,8 +267,9 @@ public class EmailService : IEmailService
             var bodyBuilder = new BodyBuilder { TextBody = plain, HtmlBody = html };
             message.Body = bodyBuilder.ToMessageBody();
 
+            var socketOptions = ResolveSocketOptions(SmtpPort, _config["SMTP_SECURE"]);
             using var client = new SmtpClient();
-            await client.ConnectAsync(SmtpHost, SmtpPort, SecureSocketOptions.StartTlsWhenAvailable);
+            await client.ConnectAsync(SmtpHost, SmtpPort, socketOptions);
             if (!string.IsNullOrEmpty(SmtpUser))
                 await client.AuthenticateAsync(SmtpUser, SmtpPass);
             await client.SendAsync(message);
@@ -289,8 +306,9 @@ public class EmailService : IEmailService
             };
             message.Body = bodyBuilder.ToMessageBody();
 
+            var socketOptions = ResolveSocketOptions(port, _config["SMTP_SECURE"]);
             using var client = new SmtpClient();
-            await client.ConnectAsync(host, port, SecureSocketOptions.StartTlsWhenAvailable);
+            await client.ConnectAsync(host, port, socketOptions);
             if (!string.IsNullOrEmpty(user))
                 await client.AuthenticateAsync(user, pass);
             await client.SendAsync(message);
